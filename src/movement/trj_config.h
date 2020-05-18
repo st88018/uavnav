@@ -6,6 +6,13 @@
 #define DEFAULT_HV_LIMIT     (0.7)
 #define DEFAULT_AV_LIMIT     (0.5)
 
+#define DEFALUT_GeoFence_Xmin     (-5.0)
+#define DEFALUT_GeoFence_Xmax     (5.0)
+#define DEFALUT_GeoFence_Ymin     (-5.0)
+#define DEFALUT_GeoFence_Ymax     (5.0)
+#define DEFALUT_GeoFence_Zmin     (-5.0)
+#define DEFALUT_GeoFence_Zmax     (5.0)
+
 #define MIN(a, b) ((a < b) ? a : b)
 #define MAX(a, b) ((a > b) ? a : b)
 
