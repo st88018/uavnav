@@ -15,39 +15,23 @@
 #include "movement/generalmove.h"
 #include "movement/circletrj.h"
 
-Vec3 takeoff;
-double takeoff_x,takeoff_y,takeoff_z;
+Vec4 takeoff;
+double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
 int    half_circle;
 bool   force_start;
+bool   Initialfromtakeoffpos;
+bool   Initilized;
 
 #define PI (3.1415926)
 
 using namespace std;
 
-enum Mission_STATE {
-  IDLE,
-  TAKEOFFP1,
-  TAKEOFFP2,
-  HOVER,
-  GOTO_CIRCLE_START,
-  CIRCLE1,
-  HOVER1,
-  RECT1,
-  RECT2,
-  RECT3,
-  RECT4,
-  RECT5,
-  HOVER2,
-  RETURN,
-  LANDING,
-  END,
-} mission_state=IDLE;
-
 mavros_msgs::State current_state;
-double uavposition_x,uavposition_y,uavposition_z;
-double tmpposition_x,tmpposition_y,tmpposition_z,tmporientation_yaw;
+double uavposition_x,uavposition_y,uavposition_z,uavposition_yaw;
+// double tmpposition_x,tmpposition_y,tmpposition_z,tmporientation_yaw;
 double uav_lp_x,uav_lp_y,uav_lp_z;
 double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
+
 void state_cb(const mavros_msgs::State::ConstPtr& msg){
   current_state = *msg;
 }
@@ -70,31 +54,25 @@ int main(int argc, char **argv)
   string configFilePath;
 
   nh.getParam("force_start", force_start);
-  cout << force_start << endl;
+  nh.getParam("Initialfromtakeoffpos", Initialfromtakeoffpos);
+  // cout << force_start << endl;
 
   takeoff_x = 0.0;
   takeoff_y = 0.0;
   takeoff_z = 1.2;
-  takeoff = Vec3(takeoff_x,takeoff_y,takeoff_z);
-  cout << "takeoff_x:" << takeoff_x << endl;
-  cout << "takeoff_y:" << takeoff_y << endl;
-  cout << "takeoff_z:" << takeoff_z << endl;
+  takeoff_yaw = 0.0;
+  takeoff = Vec4(takeoff_x,takeoff_y,takeoff_z,takeoff_yaw);
 
   ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>
       ("/mavros/state", 10, state_cb);
   ros::Subscriber uavposlp_sub = nh.subscribe<geometry_msgs::PoseStamped>
       ("/mavros/local_position/pose", 10, uav_lp_cb);
-
   ros::Publisher local_pos_pub = nh.advertise<geometry_msgs::PoseStamped>
       ("/mavros/setpoint_position/local", 10);
   ros::ServiceClient arming_client = nh.serviceClient<mavros_msgs::CommandBool>
       ("/mavros/cmd/arming");
   ros::ServiceClient set_mode_client = nh.serviceClient<mavros_msgs::SetMode>
       ("/mavros/set_mode");
-
-  //triggle (vio platform test)
-  //    ros::Publisher tri_start_pub = nh.advertise<std_msgs::String>("tri_start", 10);
-  //    ros::Publisher tri_end_pub = nh.advertise<std_msgs::String>("tri_end", 10);
 
   //the setpoint publishing rate MUST be faster than 2Hz
   ros::Rate rate(20.0);
@@ -112,7 +90,10 @@ int main(int argc, char **argv)
       cout << "Waiting for FCU connection " << endl;
     }
   }
-
+  if(Initialfromtakeoffpos)
+  {
+    cout << "Update takeoff pos " << endl;
+  }
   geometry_msgs::PoseStamped pose;
   pose.header.frame_id = "world";
   pose.pose.position.x = 0.0;
@@ -152,14 +133,37 @@ int main(int argc, char **argv)
     uavposition_y = uav_lp_y;
     uavposition_z = uav_lp_z;
 
+    static bool Missionstart = false;
+    /*Update takeoff Position**********************************************/
+    if(Initialfromtakeoffpos)
+    {
+      static bool takeoffinit=true;
+      if(takeoffinit){
+        cout << "Update takeoff pos " << endl;
+        Quaterniond q;
+        q.w() = uav_lp_qw;
+        q.x() = uav_lp_qx;
+        q.y() = uav_lp_qy;
+        q.z() = uav_lp_qz;
+        Vec3 rpy = Q2rpy(q);
+        takeoff = Vec4(uav_lp_x,uav_lp_y,uav_lp_z,rpy[2]);
+        Initialfromtakeoffpos = false;
+        takeoffinit = false;
+
+        cout << "takeoff_x:" << takeoff[0] << endl;
+        cout << "takeoff_y:" << takeoff[1] << endl;
+        cout << "takeoff_z:" << takeoff[2] << endl;
+        cout << "takeoff_yaw:" << takeoff[3] << endl;
+      }
+    }
     /*offboard and arm*****************************************************/
     if(force_start){
       static bool once=true;
       if(once){
-        mission_state = TAKEOFFP1;
         last_request = ros::Time::now();
         cout << "force start the mission " << endl;
         once = false;
+        Missionstart = true;
       }
     }
     else{
@@ -170,14 +174,23 @@ int main(int argc, char **argv)
         }
         last_request = ros::Time::now();
       }else{
-        if( !current_state.armed && (ros::Time::now() - last_request > ros::Duration(1.0))){
+        if( !current_state.armed && 
+            (ros::Time::now() - last_request > ros::Duration(1.0))){
           if( arming_client.call(arm_cmd) && arm_cmd.response.success){
             ROS_INFO("Vehicle armed");
-            mission_state = TAKEOFFP1;
+            Missionstart = true;
           }
           last_request = ros::Time::now();
         }
       }
+    }
+    /*Mission Starts here***************************************************/
+    if(Missionstart){
+      last_request = ros::Time::now();
+
+
+
+
     }
   }
   return 0;

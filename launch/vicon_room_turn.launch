@@ -1,5 +1,5 @@
 <launch>
-    <node pkg="uavnav" type="trj_fj005" name="note_trj_fj005" output="screen">
+    <node pkg="uavnav" type="trj_fj005_turn" name="note_trj_fj005_turn" output="screen">
         <param name="force_start" type="bool" value="false" />
     </node>
 </launch>

@@ -12,8 +12,8 @@ headtowards::headtowards()
 }
 headtowards::headtowards(double time,
                 double start_x, double start_y, double start_z, double start_yaw_rad,
-                double end_x,   double end_y,   double end_z,   double end_yaw,
-                double speed, double speed_yaw);
+                double end_x,   double end_y,   double end_z,   double end_yaw_rad,
+                double speed, double speed_yaw)
 {
     this->start_time = time;
     this->startx = start_x;
@@ -43,7 +43,7 @@ void headtowards::getPose(double time,
         if (endyaw>=M_PI)    endyaw-=2*M_PI;
         if (endyaw<=-M_PI)   endyaw+=2*M_PI;
         
-        head_yaw = atan((start_y-end_y)/(start_x-end_x));
+        head_yaw = atan((starty-endy)/(startx-endx));
         if (head_yaw>=M_PI)     head_yaw-=2*M_PI;
         if (head_yaw<=-M_PI)    head_yaw+=2*M_PI;
         double d_yaw1 = head_yaw - startyaw;
@@ -52,17 +52,17 @@ void headtowards::getPose(double time,
         yaw_est_t1 = fabs(d_yaw1)/speed_yaw;
         v_yaw1 = ((head_yaw - startyaw)/fabs(d_yaw1))*speed_yaw;
 
-        distance = sqrt(pow((start_x-end_x),2)+pow((start_y-end_y),2)+pow((start_z-end_z),2));
+        distance = sqrt(pow((startx-endx),2)+pow((starty-endy),2)+pow((startz-endz),2));
         h_est_t = distance/speed;
-        vx = ((start_x-end_x)/distance)*speed;
-        vy = ((start_y-end_y)/distance)*speed;
-        vz = ((start_z-end_z)/distance)*speed;
+        vx = ((startx-endx)/distance)*speed;
+        vy = ((starty-endy)/distance)*speed;
+        vz = ((startz-endz)/distance)*speed;
         
-        double d_yaw2 = end_yaw - head_yaw;
+        double d_yaw2 = endyaw - head_yaw;
         if (d_yaw2>=M_PI)       d_yaw2-=2*M_PI;
         if (d_yaw2<=-M_PI)      d_yaw2+=2*M_PI;
         yaw_est_t2 = fabs(d_yaw2)/speed_yaw;
-        v_yaw2 = ((end_yaw - head_yaw)/fabs(d_yaw2))*speed_yaw;
+        v_yaw2 = ((endyaw - head_yaw)/fabs(d_yaw2))*speed_yaw;
         
         est_flag = 1;
         
@@ -144,7 +144,7 @@ void headtowards::getPose(double time,
     }
 }
 
-int generalMove::finished()
+int headtowards::finished()
 {
     if( est_flag ==4 )
     {
@@ -156,17 +156,17 @@ int generalMove::finished()
     }
 }
 
-void generalMove::setVerticalVelocityLimit(double vv)
+void headtowards::setVerticalVelocityLimit(double vv)
 {
     vv_limit = vv;
 }
 
-void generalMove::setHorizonVelocityLimit(double hv)
+void headtowards::setHorizonVelocityLimit(double hv)
 {
     hv_limit = hv;
 }
 
-void generalMove::setAngularSpeedRadLIMIT(double w)
+void headtowards::setAngularSpeedRadLIMIT(double w)
 {
     av_limit = w;
 }

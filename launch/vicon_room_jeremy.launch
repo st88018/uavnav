@@ -1,0 +1,9 @@
+<launch>
+    <node pkg="uavnav" type="jeremy_trj_fj005" name="note_jeremy_trj_fj005" output="screen">
+        <param name="force_start" type="bool" value="false" />
+        <param name="Initialfromtakeoffpos" type="bool" value="true" />
+    </node>
+</launch>
+
+
+

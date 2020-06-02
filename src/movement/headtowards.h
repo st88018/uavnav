@@ -14,8 +14,8 @@ public:
     headtowards();
     headtowards(double time,
                 double start_x, double start_y, double start_z, double start_yaw_rad,
-                double end_x, double end_y, double end_z, double end_yaw,
-                double speed);
+                double end_x,   double end_y,   double end_z,   double end_yaw_rad,
+                double speed, double speed_yaw);
     void getPose(double time,
                  geometry_msgs::PoseStamped& pose);
     void setVerticalVelocityLimit(double v);

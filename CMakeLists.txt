@@ -69,14 +69,45 @@ target_link_libraries(emsd_demo
     )
 
 ######################################################################
-add_executable(test_trj_fj005
-    src/test_trj_fj005.cpp
+add_executable(trj_fj005
+    src/trj_fj005.cpp
     src/movement/generalmove.cpp
     src/movement/circletrj.cpp
     )
-target_link_libraries(test_trj_fj005
+target_link_libraries(trj_fj005
     ${catkin_LIBRARIES}
     ${YAML_CPP_LIBRARIES}
     ${Sophus_LIBRARIES}
     )
-
+######################################################################
+add_executable(trj_fj005_step
+    src/trj_fj005_step.cpp
+    src/movement/generalmove.cpp
+    src/movement/generalstep.cpp
+    src/movement/circletrj.cpp
+    src/movement/headtowards.cpp
+    )
+target_link_libraries(trj_fj005_step
+    ${catkin_LIBRARIES}
+    ${YAML_CPP_LIBRARIES}
+    ${Sophus_LIBRARIES}
+    )
+######################################################################
+add_executable(jeremy_trj_fj005
+    src/jeremy_trj_fj005.cpp
+    )
+target_link_libraries(jeremy_trj_fj005
+    ${catkin_LIBRARIES}
+    ${YAML_CPP_LIBRARIES}
+    ${Sophus_LIBRARIES}
+    )
+######################################################################
+add_executable(trj_fj005_turn
+    src/trj_fj005_turn.cpp
+    src/movement/generalmove.cpp
+    )
+target_link_libraries(trj_fj005_turn
+    ${catkin_LIBRARIES}
+    ${YAML_CPP_LIBRARIES}
+    ${Sophus_LIBRARIES}
+    )

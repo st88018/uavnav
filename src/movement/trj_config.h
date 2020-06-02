@@ -4,7 +4,7 @@
 
 #define DEFALUT_VV_LIMIT     (0.7)
 #define DEFAULT_HV_LIMIT     (0.7)
-#define DEFAULT_AV_LIMIT     (0.5)
+#define DEFAULT_AV_LIMIT     (1.0)
 
 #define DEFALUT_GeoFence_Xmin     (-5.0)
 #define DEFALUT_GeoFence_Xmax     (5.0)
