@@ -2,8 +2,8 @@
 #define TRJ_CONFIG_H
 
 
-#define DEFALUT_VV_LIMIT     (0.7)
-#define DEFAULT_HV_LIMIT     (0.7)
+#define DEFALUT_VV_LIMIT     (2.0)
+#define DEFAULT_HV_LIMIT     (2.0)
 #define DEFAULT_AV_LIMIT     (1.0)
 
 #define DEFALUT_GeoFence_Xmin     (-5.0)

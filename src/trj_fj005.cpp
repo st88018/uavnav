@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 
   takeoff_x = 0.0001;
   takeoff_y = 0.0001;
-  takeoff_z = 1.2001;
+  takeoff_z = 1.0001;
   takeoff = Vec3(takeoff_x,takeoff_y,takeoff_z);
   cout << "takeoff_x:" << takeoff_x << endl;
   cout << "takeoff_y:" << takeoff_y << endl;
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x+1, takeoff_y+1, takeoff_z,  0.0,
-                            takeoff_x-1, takeoff_y+1, takeoff_z,  0.0, 5);
+                            takeoff_x-1, takeoff_y+1, takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x-1, takeoff_y+1, takeoff_z,  0.0,
-                            takeoff_x-1, takeoff_y-1, takeoff_z,  0.0, 6);
+                            takeoff_x-1, takeoff_y-1, takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -305,7 +305,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x-1, takeoff_y-1,   takeoff_z,  0.0,
-                            takeoff_x+1, takeoff_y-1,   takeoff_z,  0.0, 6);
+                            takeoff_x+1, takeoff_y-1,   takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -328,7 +328,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x+1, takeoff_y-1,   takeoff_z,  0.0,
-                            takeoff_x+1, takeoff_y+1,     takeoff_z,  0.0, 3);
+                            takeoff_x+1, takeoff_y+1,     takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -351,7 +351,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x+1, takeoff_y+1,   takeoff_z,  0.0,
-                            takeoff_x-1, takeoff_y+1,     takeoff_z,  0.0, 3);
+                            takeoff_x-1, takeoff_y+1,     takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -374,7 +374,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x-1, takeoff_y+1,   takeoff_z,  0.0,
-                            takeoff_x-1, takeoff_y-1,     takeoff_z,  0.0, 3);
+                            takeoff_x-1, takeoff_y-1,     takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -397,7 +397,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             takeoff_x-1, takeoff_y-1,   takeoff_z,  0.0,
-                            takeoff_x+1, takeoff_y-1,     takeoff_z,  0.0, 3);
+                            takeoff_x+1, takeoff_y-1,     takeoff_z,  0.0, 2);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -468,7 +468,7 @@ int main(int argc, char **argv)
     
     int coutcounter;
     if(coutcounter > 20){
-      // cout << "uav local position_x: " << uavposition_x << " y: " << uavposition_y << " z: "<< uavposition_z << endl;
+      cout << "currentpos_x: " << uavposition_x << " y: " << uavposition_y << " z: "<< uavposition_z << endl;
       cout << "uavdesiredposition_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
       coutcounter = 0;
     }else{coutcounter++;}
