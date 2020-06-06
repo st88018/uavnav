@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 
   takeoff_x = 0.0;
   takeoff_y = 0.0;
-  takeoff_z = 1.2;
+  takeoff_z = 0.8;
   takeoff = Vec3(takeoff_x,takeoff_y,takeoff_z);
   cout << "takeoff_x:" << takeoff_x << endl;
   cout << "takeoff_y:" << takeoff_y << endl;
