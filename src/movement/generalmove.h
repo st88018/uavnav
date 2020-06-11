@@ -32,7 +32,7 @@ private:
     double vx,vy,vz,vyaw;
     double desx,desy,desz,desyaw;
 
-    double est_t,yaw_t;
+    double est_t,dist_t,yaw_t;
     bool init_flag;
     int gmcounter;
 };
