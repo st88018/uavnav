@@ -1,12 +1,12 @@
-#include "generalmove.h"
+#include "generalvelocity.h"
 #include "stdio.h"
 
 using namespace std;
 
-generalMove::generalMove(double time,
-                         Vec3 uav_lp_p, Vec4 uav_lp_q,
-                         double end_x, double end_y, double end_z, double end_yaw_rad,
-                         double velocity, double angular_velocity)
+generalVelocity::generalVelocity(double time,
+                    Vec3 uav_lp_p, Vec4 uav_lp_q,
+                    double end_x,   double end_y,   double end_z,   double end_yaw_rad,
+                    double velocity, double angular_velocity)
 {
     this->start_time = time;
     this->startx = uav_lp_p[0];
@@ -24,13 +24,13 @@ generalMove::generalMove(double time,
     init_flag = true;
 }
 
-void generalMove::getPose(double time, Vec3 uav_lp_p, Vec4 uav_lp_q,
-                              geometry_msgs::PoseStamped& pose)
+void generalVelocity::getPose(double time, Vec3 uav_lp_p, Vec4 uav_lp_q,
+                              geometry_msgs::PoseStamped& pose, geometry_msgs::Twist& twist)
 {
     curr_time = time;
     if(init_flag == true)
     {
-        dist = sqrt(pow((endx-startx),2)+pow((endy-starty),2)+pow((endz-startz),2));
+        double dist = (sqrt(pow((endx-startx),2)+pow((endy-starty),2)+pow((endz-startz),2)));
         est_t = dist/v;
         vx = ((endx-startx)/dist)*v;
         vy = ((endy-starty)/dist)*v;
@@ -43,22 +43,24 @@ void generalMove::getPose(double time, Vec3 uav_lp_p, Vec4 uav_lp_q,
         if (d_yaw>=M_PI)  d_yaw-=2*M_PI;
         if (d_yaw<=-M_PI) d_yaw+=2*M_PI;
         yaw_t = d_yaw/av;
-        if(yaw_t>=est_t){est_t = yaw_t;}
 
-        init_flag = false;
+        if(yaw_t>=est_t){est_t = yaw_t;}
+        
     }
     if(init_flag == false)
     {
-        dt=curr_time-start_time;
+        double dt=curr_time-start_time;
         desx = startx+dt*vx;
         desy = starty+dt*vy;
-        desz = startz+dt*vz;
+        desz = starty+dt*vz;
         if(dt<=yaw_t)
         {
             desyaw = startyaw+dt*av;
         }else{
             desyaw = endyaw;
         }
+        
+        
         pose.pose.position.x = desx;
         pose.pose.position.y = desy;
         pose.pose.position.z = desz;
@@ -67,23 +69,14 @@ void generalMove::getPose(double time, Vec3 uav_lp_p, Vec4 uav_lp_q,
         pose.pose.orientation.x = q.x();
         pose.pose.orientation.y = q.y();
         pose.pose.orientation.z = q.z();
-        // cout <<"dt: "<< dt << endl;
+
+        twist.linear.x = vx;
+        twist.linear.y = vy;
+        twist.linear.z = vz;
     }
-    
-    // if(gmcounter > 1){
-    //   cout << "------------------------------------------------------------------------------" << endl;
-    //   cout << "currentpos_x: " << uav_lp_p[0] << " y: " << uav_lp_p[1] << " z: "<< uav_lp_p[2] << endl;
-    //   cout << "desiredpos_x: " << desx << " y: " << desy << " z: "<< desz << endl;
-    //   cout << "est_t: "<< est_t <<" dist: "<< dist << endl;
-    //   cout << "startx: "<< startx << " starty: "<< starty <<" startz: "<< startz << endl;
-    //   cout << "endx: "<< endx << " endy: "<< endy <<" endz: "<< endz << endl;
-    //   cout << "vx: " << vx << " vy: " << vy << " vz: " << vz << " dt: "<< dt << endl;
-    //   gmcounter = 0;
-    //   cout << "------------------------------------------------------------------------------" << endl;
-    // }else{gmcounter++;}
 }
 
-int generalMove::finished()
+int generalVelocity::finished()
 {
     if((curr_time-start_time)>=est_t)
     {

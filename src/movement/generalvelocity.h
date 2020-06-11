@@ -1,23 +1,23 @@
-#ifndef GENERALMOVE_H
-#define GENERALMOVE_H
+#ifndef GENERALVELOCITY_H
+#define GENERALVELOCITY_H
 
 #include <stdio.h>
 #include <math.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Twist.h>
 #include "../utils/kinetic_math.h"
 #include "trj_config.h"
 
 
-class generalMove
+class generalVelocity
 {
 public:
-    generalMove();
-    generalMove(double time,
-                Vec3 uav_lp_p, Vec4 uav_lp_q,
-                double end_x,   double end_y,   double end_z,   double end_yaw_rad,
-                double velocity, double angular_velocity);
+    generalVelocity(double time,
+                    Vec3 uav_lp_p, Vec4 uav_lp_q,
+                    double end_x,   double end_y,   double end_z,   double end_yaw_rad,
+                    double velocity, double angular_velocity);
     void getPose(double time, Vec3 uav_lp_p, Vec4 uav_lp_q,
-                 geometry_msgs::PoseStamped& pose);
+                 geometry_msgs::PoseStamped& pose, geometry_msgs::Twist& twist);
     int  finished(void);
 private:
     double endx, endy, endz, endyaw;
@@ -26,7 +26,6 @@ private:
 
     double start_time;
     double curr_time;
-    double dt;
 
     double v,av;
     double vx,vy,vz,vyaw;
@@ -34,9 +33,8 @@ private:
 
     double est_t,yaw_t;
     bool init_flag;
-    int gmcounter;
 };
 
 
 
-#endif // GENERALMOVE_H
+#endif // GENERALVELOCITY_H

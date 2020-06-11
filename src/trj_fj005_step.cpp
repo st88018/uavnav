@@ -15,14 +15,7 @@
 #include "movement/generalstep.h"
 #include "movement/generalmove.h"
 #include "movement/circletrj.h"
-
-Vec3 takeoff;
-double takeoff_x,takeoff_y,takeoff_z;
-int    half_circle;
-bool   force_start;
-
 #define PI (3.1415926)
-
 using namespace std;
 
 enum Mission_STATE {
@@ -52,10 +45,16 @@ enum Mission_STATE {
 } mission_state=IDLE;
 
 mavros_msgs::State current_state;
-double uavposition_x,uavposition_y,uavposition_z;
+double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
+int    half_circle;
+bool   force_start; 
+bool   Initialfromtakeoffpos;
 double tmpposition_x,tmpposition_y,tmpposition_z,tmporientation_yaw;
 double uav_lp_x,uav_lp_y,uav_lp_z;
 double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
+double velocity_takeoff,velocity_angular, velocity_mission, altitude_mission;
+Vec3 uav_lp_p;
+Vec4 uav_lp_q;
 void state_cb(const mavros_msgs::State::ConstPtr& msg){
   current_state = *msg;
 }
@@ -68,6 +67,8 @@ void uav_lp_cb(const geometry_msgs::PoseStamped::ConstPtr& pose){
   uav_lp_qy = pose->pose.orientation.y;
   uav_lp_qz = pose->pose.orientation.z;
   uav_lp_qw = pose->pose.orientation.w;
+  uav_lp_p = Vec3(uav_lp_x,uav_lp_y,uav_lp_z);
+  uav_lp_q = Vec4(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
 }
 
 int main(int argc, char **argv)
@@ -77,22 +78,26 @@ int main(int argc, char **argv)
 
   string configFilePath;
 
-  nh.getParam("force_start", force_start);
-  cout << force_start << endl;
+  takeoff_x = 0.0;
+  takeoff_y = 0.0;
+  takeoff_z = 0.0;
+  takeoff_yaw = 0; //in rad
+  velocity_mission = 0.5;
+  velocity_takeoff = 0.5;
+  altitude_mission = 1;
 
-  takeoff_x = 0.0001;
-  takeoff_y = 0.0001;
-  takeoff_z = 0.8001;
-  takeoff = Vec3(takeoff_x,takeoff_y,takeoff_z);
-  cout << "takeoff_x:" << takeoff_x << endl;
-  cout << "takeoff_y:" << takeoff_y << endl;
-  cout << "takeoff_z:" << takeoff_z << endl;
+  nh.getParam("force_start", force_start);
+  nh.getParam("Initialfromtakeoffpos", Initialfromtakeoffpos);
+  nh.getParam("Velocity_mission", velocity_mission);
+  nh.getParam("Velocity_takeoff", velocity_takeoff);
+  nh.getParam("Velocity_angular", velocity_angular);
+  nh.getParam("Altitude_mission", altitude_mission);
+  cout << force_start << endl;
 
   ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>
       ("/mavros/state", 10, state_cb);
   ros::Subscriber uavposlp_sub = nh.subscribe<geometry_msgs::PoseStamped>
       ("/mavros/local_position/pose", 10, uav_lp_cb);
-
   ros::Publisher local_pos_pub = nh.advertise<geometry_msgs::PoseStamped>
       ("/mavros/setpoint_position/local", 10);
   ros::ServiceClient arming_client = nh.serviceClient<mavros_msgs::CommandBool>
@@ -100,26 +105,18 @@ int main(int argc, char **argv)
   ros::ServiceClient set_mode_client = nh.serviceClient<mavros_msgs::SetMode>
       ("/mavros/set_mode");
 
-  //triggle (vio platform test)
-  //    ros::Publisher tri_start_pub = nh.advertise<std_msgs::String>("tri_start", 10);
-  //    ros::Publisher tri_end_pub = nh.advertise<std_msgs::String>("tri_end", 10);
-
-  //the setpoint publishing rate MUST be faster than 2Hz
+   //the setpoint publishing rate MUST be faster than 2Hz
   ros::Rate rate(20.0);
+
   //wait for FCU connection
-  if(force_start)
-  {
-    cout << "force start " << endl;
-  }
-  else
-  {
+  if(force_start){cout << "force start " << endl;}
+  else{
     cout << "Waiting for FCU connection " << endl;
     while(ros::ok() && !current_state.connected){
       ros::spinOnce();
       rate.sleep();
       cout << "Waiting for FCU connection " << endl;
-    }
-  }
+    }}
 
   geometry_msgs::PoseStamped pose;
   pose.header.frame_id = "world";
@@ -153,14 +150,36 @@ int main(int argc, char **argv)
   ros::Time last_request = ros::Time::now();
 
   while(ros::ok()){
-    //update the uav position
-    //from motion capture system
-    //local postion estimator(in simulation platform)
-    uavposition_x = uav_lp_x;
-    uavposition_y = uav_lp_y;
-    uavposition_z = uav_lp_z;
-
-    /*offboard and arm*****************************************************/
+   /*Update takeoff Position**********************************************/
+    if(Initialfromtakeoffpos)
+    {
+      static bool takeoffinit=true;
+      if(takeoffinit){
+        Quaterniond q(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
+        Vec3 rpy = Q2rpy(q);
+        takeoff_x = uav_lp_x;
+        takeoff_y = uav_lp_y;
+        takeoff_z = uav_lp_z;
+        takeoff_yaw = rpy[2];
+        Initialfromtakeoffpos = false;
+        takeoffinit = false;
+        cout << "====================================================" <<endl;
+        cout << "====================================================" <<endl;
+        cout << "Mission Params Initialized" << endl;
+        cout << " " << endl;
+        cout << "takeoff_x: " << takeoff_x << endl;
+        cout << "takeoff_y: " << takeoff_y << endl;
+        cout << "takeoff_z: " << takeoff_z << endl;
+        cout << "takeoff_yaw: " << takeoff_yaw << endl;
+        cout << "Mission Altitude: " << altitude_mission << endl;
+        cout << "Mission Velocity: " << velocity_mission << endl;
+        cout << "Angular Velocity: " << velocity_angular << endl;
+        cout << "Takeoff Velocity: " << velocity_takeoff << endl;
+        cout << "====================================================" <<endl;
+        cout << "====================================================" <<endl;
+      }
+    }
+        /*offboard and arm*****************************************************/
     if(force_start)
     {
       static bool once=true;
@@ -174,7 +193,6 @@ int main(int argc, char **argv)
     }
     else
     {
-      
       if( current_state.mode != "OFFBOARD" && (ros::Time::now() - last_request > ros::Duration(1.0)))
       {
         if( set_mode_client.call(offb_set_mode) &&
@@ -200,9 +218,10 @@ int main(int argc, char **argv)
     if(mission_state==TAKEOFFP1)
     {
       static generalMove takeoff1(ros::Time::now().toSec(),
-                                  0,0,0-0.2,0.0,
-                                  takeoff_x,takeoff_y,takeoff_z-0.2,0.0,(takeoff_z-0.2)/0.1);
-      takeoff1.getPose(ros::Time::now().toSec(),pose);
+                                  uav_lp_p, uav_lp_q,
+                                  takeoff_x,takeoff_y,altitude_mission-0.2,takeoff_yaw,
+                                  velocity_takeoff,velocity_angular);
+      takeoff1.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
       if(takeoff1.finished())
       {
         cout << "Takeoff P1 finished" << endl;
@@ -213,9 +232,10 @@ int main(int argc, char **argv)
     if(mission_state==TAKEOFFP2)
     {
       static generalMove takeoff2(ros::Time::now().toSec(),
-                                  takeoff_x,takeoff_y,takeoff_z-0.2,0.0,
-                                  takeoff_x,takeoff_y,takeoff_z,0.0,5);
-      takeoff2.getPose(ros::Time::now().toSec(),pose);
+                                  uav_lp_p, uav_lp_q,
+                                  takeoff_x,takeoff_y,altitude_mission,takeoff_yaw,
+                                  velocity_takeoff,velocity_angular);
+      takeoff2.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
       if(takeoff2.finished())
       {
         mission_state = HOVER1;
@@ -226,7 +246,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER1)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT1;
         cout << "Hover1 finished" << endl;
@@ -237,9 +257,10 @@ int main(int argc, char **argv)
     if(mission_state==RECT1)
     {
       static generalMove gm(ros::Time::now().toSec(),
-                            takeoff_x,     takeoff_y,   takeoff_z,  0.0,
-                            takeoff_x+0.5, takeoff_y+0.5, takeoff_z,  0.0, 3);
-      gm.getPose(ros::Time::now().toSec(),pose);
+                            uav_lp_p, uav_lp_q,
+                            takeoff_x+0.75, takeoff_y+0.75, altitude_mission, takeoff_yaw,
+                            velocity_mission,velocity_angular);
+      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
       if(gm.finished())
       {
         mission_state = HOVER2;
@@ -260,7 +281,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT2)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x-0.5, takeoff_y+0.5, takeoff_z,  0.0,5);
+                            takeoff_x-0.75, takeoff_y+0.75, altitude_mission, takeoff_yaw
+                            ,5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -271,7 +293,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER3)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT3;
         cout << "Hover3 finished" << endl;
@@ -282,7 +304,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT3)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x-0.5, takeoff_y-0.5, takeoff_z,  0.0,5);
+                            takeoff_x-0.75, takeoff_y-0.75, altitude_mission,  takeoff_yaw,
+                            5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -293,7 +316,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER4)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT4;
         cout << "Hover4 finished" << endl;
@@ -304,7 +327,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT4)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x+0.5, takeoff_y-0.5,   takeoff_z,  0.0,5);
+                            takeoff_x+0.75, takeoff_y-0.75, altitude_mission,  takeoff_yaw,
+                            5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -315,7 +339,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER5)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT5;
         cout << "Hover5 finished" << endl;
@@ -326,7 +350,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT5)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x+0.5, takeoff_y+0.5,     takeoff_z,  0.0, 5);
+                            takeoff_x+0.75, takeoff_y+0.75, altitude_mission,  takeoff_yaw,
+                            5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -337,7 +362,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER6)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT6;
         cout << "Hover6 finished" << endl;
@@ -348,7 +373,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT6)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x-0.5, takeoff_y+0.5,     takeoff_z,  0.0, 5);
+                            takeoff_x-0.75, takeoff_y+0.75, altitude_mission, takeoff_yaw,
+                            5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -359,7 +385,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER7)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT7;
         cout << "Hover7 finished" << endl;
@@ -370,7 +396,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT7)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x-0.5, takeoff_y-0.5,     takeoff_z,  0.0, 5);
+                            takeoff_x-0.75, takeoff_y-0.75, altitude_mission,  takeoff_yaw,
+                            5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -381,7 +408,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER8)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RECT8;
         cout << "Hover8 finished" << endl;
@@ -392,7 +419,8 @@ int main(int argc, char **argv)
     if(mission_state==RECT8)
     {
       static generalStep gm(ros::Time::now().toSec(),
-                            takeoff_x+0.5, takeoff_y-0.5,     takeoff_z,  0.0, 5);
+                            takeoff_x+0.75, takeoff_y-0.75, altitude_mission, takeoff_yaw,
+                            5);
       gm.getPose(ros::Time::now().toSec(),pose);
       if(gm.finished())
       {
@@ -403,7 +431,7 @@ int main(int argc, char **argv)
 
     if(mission_state==HOVER9)
     {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
+      if(ros::Time::now()-last_request > ros::Duration(1.0))
       {
         mission_state = RETURN;
         cout << "Hover9 finished" << endl;
@@ -414,10 +442,10 @@ int main(int argc, char **argv)
     if(mission_state==RETURN)
     {
       static generalMove gotolanding(ros::Time::now().toSec(),
-                                     takeoff_x+0.5,takeoff_y-0.5,takeoff_z,0.0,
-                                     takeoff_x,takeoff_y,takeoff_z,0.0,
-                                     3);
-      gotolanding.getPose(ros::Time::now().toSec(),pose);
+                                     uav_lp_p, uav_lp_q,
+                                     takeoff_x,takeoff_y,altitude_mission, takeoff_yaw,
+                                     velocity_mission,velocity_angular);
+      gotolanding.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
       if(gotolanding.finished())
       {
         mission_state = LANDING;
@@ -462,9 +490,9 @@ int main(int argc, char **argv)
     rate.sleep();
     
     int coutcounter;
-    if(coutcounter > 20){
-      cout << "currentpos_x: " << uavposition_x << " y: " << uavposition_y << " z: "<< uavposition_z << endl;
-      cout << "target_pos_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
+    if(coutcounter > 30){
+      cout << "currentpos_x: " << uav_lp_x << " y: " << uav_lp_y << " z: "<< uav_lp_z << endl;
+      cout << "desiredpos_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
       coutcounter = 0;
     }else{coutcounter++;}
     
