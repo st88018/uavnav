@@ -77,17 +77,17 @@ void generalMove::getPose(double time, Vec3 uav_lp_p, Vec4 uav_lp_q,
         pose.pose.orientation.z = q.z();
     }
     
-    if(gmcounter > 10){
-      cout << "------------------------------------------------------------------------------" << endl;
-      cout << "currentpos_x: " << uav_lp_p[0] << " y: " << uav_lp_p[1] << " z: "<< uav_lp_p[2] << endl;
-      cout << "desiredpos_x: " << desx << " y: " << desy << " z: "<< desz << endl;
-      cout << "est_t: "<< est_t << " yaw_t: " << yaw_t << " dist_t: " << dist_t <<" dist: "<< dist << endl;
-      cout << "startx: "<< startx << " starty: "<< starty <<" startz: "<< startz << endl;
-      cout << "endx: "<< endx << " endy: "<< endy <<" endz: "<< endz << endl;
-      cout << "vx: " << vx << " vy: " << vy << " vz: " << vz << " dt: "<< dt << endl;
-      gmcounter = 0;
-      cout << "------------------------------------------------------------------------------" << endl;
-    }else{gmcounter++;}
+    // if(gmcounter > 10){
+    //   cout << "------------------------------------------------------------------------------" << endl;
+    //   cout << "currentpos_x: " << uav_lp_p[0] << " y: " << uav_lp_p[1] << " z: "<< uav_lp_p[2] << endl;
+    //   cout << "desiredpos_x: " << desx << " y: " << desy << " z: "<< desz << endl;
+    //   cout << "est_t: "<< est_t << " yaw_t: " << yaw_t << " dist_t: " << dist_t <<" dist: "<< dist << endl;
+    //   cout << "startx: "<< startx << " starty: "<< starty <<" startz: "<< startz << endl;
+    //   cout << "endx: "<< endx << " endy: "<< endy <<" endz: "<< endz << endl;
+    //   cout << "vx: " << vx << " vy: " << vy << " vz: " << vz << " dt: "<< dt << endl;
+    //   gmcounter = 0;
+    //   cout << "------------------------------------------------------------------------------" << endl;
+    // }else{gmcounter++;}
 }
 
 int generalMove::finished()

@@ -5,6 +5,7 @@
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/State.h>
 #include <cstdio>
+#include <deque>
 #include <unistd.h>
 #include <termios.h>
 #include <fcntl.h>
@@ -32,13 +33,6 @@ enum Mission_STATE {
   RECT4,
   HOVER5,
   RECT5,
-  HOVER6,
-  RECT6,
-  HOVER7,
-  RECT7,
-  HOVER8,
-  RECT8,
-  HOVER9,
   RETURN,
   LANDING,
   END,
@@ -107,17 +101,18 @@ int main(int argc, char **argv)
       ("/mavros/set_mode");
 
   //the setpoint publishing rate MUST be faster than 2Hz
-  ros::Rate rate(20.0);
+  ros::Rate rate(50.0);
 
-  //wait for FCU connection
-  if(force_start){cout << "force start " << endl;}
+  //wait for FCU connection 
+  if(force_start){
+    cout << "force start " << endl;}
   else{
     cout << "Waiting for FCU connection " << endl;
     while(ros::ok() && !current_state.connected){
       ros::spinOnce();
       rate.sleep();
       cout << "Waiting for FCU connection " << endl;
-    }}
+  }}
 
   geometry_msgs::PoseStamped pose;
   pose.header.frame_id = "world";
@@ -131,16 +126,12 @@ int main(int argc, char **argv)
 
   //send a few setpoints before starting
   if(force_start)
-  {
-    cout << "force start " << endl;
-  }
-  else
-  {
+    {cout << "force start " << endl;}
+  else{
     for(int i = 100; ros::ok() && i > 0; --i){
       local_pos_pub.publish(pose);
       ros::spinOnce();
-      rate.sleep();
-    }
+      rate.sleep();}
   }
 
   mavros_msgs::SetMode offb_set_mode;
@@ -149,6 +140,7 @@ int main(int argc, char **argv)
   arm_cmd.request.value = true;
   cout << "change last_request A" << endl;
   ros::Time last_request = ros::Time::now();
+  ros::Time init_time = ros::Time::now();
 
   while(ros::ok()){
     /*Update takeoff Position**********************************************/
@@ -182,26 +174,23 @@ int main(int argc, char **argv)
     }
     /*offboard and arm*****************************************************/
     if(force_start)
-    {
-      static bool once=true;
-      if(once)
-      {
+    {static bool once=true;
+      if(once){
         mission_state = TAKEOFFP1;
         last_request = ros::Time::now();
         cout << "force start the mission " << endl;
-        once = false;
-      }
+        once = false;}
     }
-    else
-    {
-      if( current_state.mode != "OFFBOARD" && (ros::Time::now() - last_request > ros::Duration(1.0)))
-      {
+    else{
+      if( current_state.mode != "OFFBOARD" && 
+          (ros::Time::now() - last_request > ros::Duration(1.0)) &&
+          (ros::Time::now() - init_time < ros::Duration(20.0) )){ //Set Offboard trigger duration here
         if( set_mode_client.call(offb_set_mode) &&
             offb_set_mode.response.mode_sent){
           ROS_INFO("Offboard enabled");
         }
-        last_request = ros::Time::now();
-      } else {
+        last_request = ros::Time::now();}
+      else{
         if( !current_state.armed &&
             (ros::Time::now() - last_request > ros::Duration(1.0))){
           if( arming_client.call(arm_cmd) &&
@@ -210,9 +199,7 @@ int main(int argc, char **argv)
             mission_state = TAKEOFFP1;
           }
           last_request = ros::Time::now();
-        }
-      }
-    }
+    }}}
 
     /*takeoff*****************************************************/
     //PLEASE DEFINE THE LANDING PARAMETER HERE
@@ -360,89 +347,7 @@ int main(int argc, char **argv)
       gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
       if(gm.finished())
       {
-        mission_state = HOVER6;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==HOVER6)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT6;
-        cout << "Hover6 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==RECT6)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x-1, takeoff_y+1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER7;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==HOVER7)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT7;
-        cout << "Hover7 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==RECT7)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x-1, takeoff_y-1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER8;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==HOVER8)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT8;
-        cout << "Hover8 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==RECT8)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x+1, takeoff_y-1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER9;
-        last_request = ros::Time::now();
-      }
-    }
-
-    if(mission_state==HOVER9)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
         mission_state = RETURN;
-        cout << "Hover9 finished" << endl;
         last_request = ros::Time::now();
       }
     }
@@ -498,9 +403,13 @@ int main(int argc, char **argv)
     rate.sleep();
     
     int coutcounter;
-    if(coutcounter > 30){
+    if(coutcounter > 50){
+      cout << "------------------------------------------------------------------------------" << endl;
       cout << "currentpos_x: " << uav_lp_x << " y: " << uav_lp_y << " z: "<< uav_lp_z << endl;
       cout << "desiredpos_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
+      cout << "ROS_time: " << ros::Time::now() << endl;
+      cout << "ROS_init_time: " << init_time << endl;
+      cout << "------------------------------------------------------------------------------" << endl;
       coutcounter = 0;
     }else{coutcounter++;}
     
