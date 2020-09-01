@@ -14,7 +14,6 @@
 #include "utils/yamlRead.h"
 #include "utils/eigen_typedef.h"
 #include "movement/generalmove.h"
-#include "movement/generalvelocity.h"
 #include "movement/circletrj.h"
 #define PI (3.1415926)
 using namespace std;
@@ -40,7 +39,7 @@ enum Mission_STATE {
 
 mavros_msgs::State current_state;
 double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
-int    half_circle;
+int    Mission_state,Mission_stage;
 bool   force_start; 
 bool   Initialfromtakeoffpos;
 double tmpposition_x,tmpposition_y,tmpposition_z,tmporientation_yaw;
@@ -49,6 +48,39 @@ double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
 double velocity_takeoff,velocity_angular, velocity_mission, altitude_mission;
 Vec3 uav_lp_p;
 Vec4 uav_lp_q;
+
+// Initial trajectories
+ros::Time traj1_init_time;
+deque<double> traj1_timestamp;
+deque<Vec3> traj1_xyz;
+deque<Vec4> traj1_q;
+
+
+void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
+                    double end_x, double end_y, double end_z, double end_yaw_rad,
+                    double velocity, double angular_velocity){
+  Quaterniond q(uav_lp_q(0),uav_lp_q(1),uav_lp_q(2),uav_lp_q(3));
+  Vec3 start_rpy = Q2rpy(q);
+  Vec3 start_xyz = uav_lp_p;
+  Vec3 des_xyz = Vec3(end_x,end_y,end_z);
+  Vec3 des_rpy = Vec3(0,0,end_yaw_rad);
+
+  double dist = sqrt(pow((des_xyz[0]-start_xyz[0]),2)+pow((des_xyz[1]-start_xyz[1]),2)+pow((des_xyz[2]-start_xyz[2]),2));
+  double duration = dist/velocity; // In seconds
+  Vec3 vxyz = Vec3(((des_xyz[0]-start_xyz[0])/dist)*velocity,((des_xyz[1]-start_xyz[1])/dist)*velocity,((des_xyz[2]-start_xyz[2])/dist)*velocity);
+  if (start_rpy[2]>=M_PI)  start_rpy[2]-=2*M_PI;
+  if (start_rpy[2]<=-M_PI) start_rpy[2]+=2*M_PI;
+  if (des_rpy[2]>=M_PI)    des_rpy[2]-=2*M_PI;
+  if (des_rpy[2]<=-M_PI)   des_rpy[2]+=2*M_PI;
+  double d_yaw = des_rpy[2] - start_rpy[2];
+  if (d_yaw>=M_PI)  d_yaw-=2*M_PI;
+  if (d_yaw<=-M_PI) d_yaw+=2*M_PI;
+  double yaw_duration = sqrt(pow(d_yaw/angular_velocity,2));
+  if(yaw_duration>=duration){duration = yaw_duration;}
+
+
+
+}
 
 void state_cb(const mavros_msgs::State::ConstPtr& msg){
   current_state = *msg;
@@ -68,6 +100,7 @@ void uav_lp_cb(const geometry_msgs::PoseStamped::ConstPtr& pose){
 
 int main(int argc, char **argv)
 {
+  
   ros::init(argc, argv, "offboard_node");
   ros::NodeHandle nh("~");
 
@@ -81,13 +114,11 @@ int main(int argc, char **argv)
   velocity_takeoff = 0.5;
   altitude_mission = 1;
 
-  nh.getParam("force_start", force_start);
   nh.getParam("Initialfromtakeoffpos", Initialfromtakeoffpos);
   nh.getParam("Velocity_mission", velocity_mission);
   nh.getParam("Velocity_takeoff", velocity_takeoff);
   nh.getParam("Velocity_angular", velocity_angular);
   nh.getParam("Altitude_mission", altitude_mission);
-  cout << force_start << endl;
 
   ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>
       ("/mavros/state", 10, state_cb);
@@ -101,19 +132,17 @@ int main(int argc, char **argv)
       ("/mavros/set_mode");
 
   //the setpoint publishing rate MUST be faster than 2Hz
-  ros::Rate rate(50.0);
+  ros::Rate rate(20.0);
 
   //wait for FCU connection 
-  if(force_start){
-    cout << "force start " << endl;}
-  else{
+  cout << "Waiting for FCU connection " << endl;
+  while(ros::ok() && !current_state.connected){
+    ros::spinOnce();
+    rate.sleep();
     cout << "Waiting for FCU connection " << endl;
-    while(ros::ok() && !current_state.connected){
-      ros::spinOnce();
-      rate.sleep();
-      cout << "Waiting for FCU connection " << endl;
-  }}
+  }
 
+  //send a few setpoints before starting
   geometry_msgs::PoseStamped pose;
   pose.header.frame_id = "world";
   pose.pose.position.x = 0.0;
@@ -123,15 +152,11 @@ int main(int argc, char **argv)
   pose.pose.orientation.y=0.0;
   pose.pose.orientation.z=0.0;
   pose.pose.orientation.w=1.0;
-
-  //send a few setpoints before starting
-  if(force_start)
-    {cout << "force start " << endl;}
-  else{
-    for(int i = 100; ros::ok() && i > 0; --i){
-      local_pos_pub.publish(pose);
-      ros::spinOnce();
-      rate.sleep();}
+  
+  for(int i = 100; ros::ok() && i > 0; --i){
+    local_pos_pub.publish(pose);
+    ros::spinOnce();
+    rate.sleep();
   }
 
   mavros_msgs::SetMode offb_set_mode;
@@ -173,23 +198,15 @@ int main(int argc, char **argv)
       }
     }
     /*offboard and arm*****************************************************/
-    if(force_start)
-    {static bool once=true;
-      if(once){
-        mission_state = TAKEOFFP1;
-        last_request = ros::Time::now();
-        cout << "force start the mission " << endl;
-        once = false;}
-    }
-    else{
-      if( current_state.mode != "OFFBOARD" && 
+    if( current_state.mode != "OFFBOARD" && 
           (ros::Time::now() - last_request > ros::Duration(1.0)) &&
           (ros::Time::now() - init_time < ros::Duration(20.0) )){ //Set Offboard trigger duration here
         if( set_mode_client.call(offb_set_mode) &&
             offb_set_mode.response.mode_sent){
           ROS_INFO("Offboard enabled");
         }
-        last_request = ros::Time::now();}
+        last_request = ros::Time::now();
+      }
       else{
         if( !current_state.armed &&
             (ros::Time::now() - last_request > ros::Duration(1.0))){
@@ -199,7 +216,8 @@ int main(int argc, char **argv)
             mission_state = TAKEOFFP1;
           }
           last_request = ros::Time::now();
-    }}}
+        }
+      }
 
     /*takeoff*****************************************************/
     //PLEASE DEFINE THE LANDING PARAMETER HERE
@@ -396,7 +414,7 @@ int main(int argc, char **argv)
       pose.pose.position.z = -0.3;
       return 0;
     }
-    //cout  << pose.pose.position.x << "," << pose.pose.position.y << "," << pose.pose.position.z << endl;
+
 
     local_pos_pub.publish(pose);
     ros::spinOnce();
@@ -405,10 +423,11 @@ int main(int argc, char **argv)
     int coutcounter;
     if(coutcounter > 50){
       cout << "------------------------------------------------------------------------------" << endl;
+      cout << "Mission_Stage: " << Mission_stage << "    Mission_State: " << Mission_state <<endl;
       cout << "currentpos_x: " << uav_lp_x << " y: " << uav_lp_y << " z: "<< uav_lp_z << endl;
       cout << "desiredpos_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
       cout << "ROS_time: " << ros::Time::now() << endl;
-      cout << "ROS_init_time: " << init_time << endl;
+      cout << "Mission_init_time: " << init_time << endl;
       cout << "------------------------------------------------------------------------------" << endl;
       coutcounter = 0;
     }else{coutcounter++;}
