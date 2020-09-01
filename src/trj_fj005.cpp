@@ -66,7 +66,8 @@ void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
   Vec3 des_rpy = Vec3(0,0,end_yaw_rad);
 
   double dist = sqrt(pow((des_xyz[0]-start_xyz[0]),2)+pow((des_xyz[1]-start_xyz[1]),2)+pow((des_xyz[2]-start_xyz[2]),2));
-  double duration = dist/velocity; // In seconds
+  double dist_duration = dist/velocity; // In seconds
+  double duration; //total duration in seconds
   Vec3 vxyz = Vec3(((des_xyz[0]-start_xyz[0])/dist)*velocity,((des_xyz[1]-start_xyz[1])/dist)*velocity,((des_xyz[2]-start_xyz[2])/dist)*velocity);
   if (start_rpy[2]>=M_PI)  start_rpy[2]-=2*M_PI;
   if (start_rpy[2]<=-M_PI) start_rpy[2]+=2*M_PI;
@@ -76,10 +77,31 @@ void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
   if (d_yaw>=M_PI)  d_yaw-=2*M_PI;
   if (d_yaw<=-M_PI) d_yaw+=2*M_PI;
   double yaw_duration = sqrt(pow(d_yaw/angular_velocity,2));
-  if(yaw_duration>=duration){duration = yaw_duration;}
+  if(yaw_duration>=dist_duration){duration = yaw_duration;}else{duration = dist_duration;}
 
+  //initialize trajectory1
+  traj1_timestamp.clear();traj1_xyz.clear();traj1_q.clear();
 
+  int wpc = duration/25; //waypointcounts in 25 Hz (40ms)
+  for (int i=0; i<wpc; i++){
+    double dt = 0.04*i;
+    Vec3 xyz;
+    Quaterniond q;
+    if(dt<=yaw_duration){
+      q = rpy2Q(Vec3(0,0,start_rpy[2]+dt*angular_velocity));
 
+    }else{
+      q = rpy2Q(des_rpy);
+    }
+    if(dt<=duration){
+      xyz = Vec3(start_xyz[0]+dt*vxyz[0],start_xyz[1]+dt*vxyz[1],start_xyz[2]+dt*vxyz[2]);
+    }else{
+      xyz = des_xyz;
+    }
+    traj1_timestamp.push_back(dt);
+    traj1_xyz.push_back(xyz);
+    traj1_q.push_back(Vec4(q.w(),q.x(),q.y(),q.z()));
+  }
 }
 
 void state_cb(const mavros_msgs::State::ConstPtr& msg){
