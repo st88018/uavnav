@@ -127,25 +127,20 @@ void Mission_Generator(){
 
 void traj_pub(){
 
-  int currentstate,currentstage;
   double current_time = ros::Time::now().toSec();
-  Vec8 traj1_deque_front = trajectory1.front();
+  // Update the information of current trajectory
   Vec8 traj1_deque_back = trajectory1.back();
   double traj1_start_time = traj1_deque_back[0];
+  double trajectory_duration = traj1_deque_back[1];
   
-  // if (trajectory1_initflag){
-  //   traj_init_time = ros::Time::now().toSec();
-  //   trajectory1_initflag = false;
-  //   cout << "====================================================" <<endl;
-  //   cout << "Trajectory initialized !!" <<endl;
-  //   cout << "====================================================" <<endl;
-  // }
+  Vec8 traj1_deque_front = trajectory1.front();
+
   while (current_time - traj1_start_time - traj1_deque_front[0] > 0){
     trajectory1.pop_front();
     traj1_deque_front = trajectory1.front();
     cout << "ddt: " <<  current_time - traj1_start_time - traj1_deque_front[0] << endl;
   }
- 
+   
   // pose.header.frame_id = "world";
   // pose.pose.position.x = traj1_deque_front[1];
   // pose.pose.position.y = traj1_deque_front[2];
@@ -154,6 +149,8 @@ void traj_pub(){
   // pose.pose.orientation.x = traj1_deque_front[5];
   // pose.pose.orientation.y = traj1_deque_front[6];
   // pose.pose.orientation.z = traj1_deque_front[7];
+  
+  if (traj1_deque_front[0] > trajectory_duration){ Mission_stage++;}
 }
 
 void Finite_state_WP_mission(){
@@ -188,16 +185,16 @@ void Finite_state_WP_mission(){
       }
     }
     //Default generate 1 second of hover
-    for (int i=0; i<(1/Trajectory_timestep); i++){
+    int hovertime = 1;
+    for (int i=0; i<(hovertime/Trajectory_timestep); i++){
         traj1[0] = traj1[0] + Trajectory_timestep;
         trajectory1.push_back(traj1);
     }
     //Last element of the trajectory stored information of the trajectory
     //Trajectory staring time, Trajectory duration
-    traj1 << ros::Time::now().toSec(), traj1[0]-1, 0, 0, 0, 0, 0, 0; 
+    traj1 << ros::Time::now().toSec(), traj1[0]-hovertime, 0, 0, 0, 0, 0, 0; 
     trajectory1.push_back(traj1);
   }
-
   traj_pub();
 }
 
