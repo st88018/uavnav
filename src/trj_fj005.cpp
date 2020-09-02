@@ -43,11 +43,13 @@ int    Mission_state = 0;
 int    Mission_stage = 0;
 int    Mission_stage_count, Current_Mission_stage;
 bool   Initialfromtakeoffpos;
+double Trajectory_timestep = 0.01; // in seconds 
 double uav_lp_x,uav_lp_y,uav_lp_z;
 double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
 double velocity_takeoff,velocity_angular, velocity_mission, altitude_mission;
 Vec3 uav_lp_p;
 Vec4 uav_lp_q;
+Vec8 Current_stage_process;
 geometry_msgs::PoseStamped pose;
 
 // Initial trajectories
@@ -55,31 +57,72 @@ deque<Vec8> trajectory1;
 bool trajectory1_initflag = false;
 
 // Initial waypoints
-deque<Vec11> waypoints;
+deque<Vec8> waypoints;
 
-void Missionarrangement(){
-  // Waypoints
-  Vec11 wp; // state x y z qw qx qy qz waittime v av
-  wp << 1, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0;   // state = 1; takeoff no heading change.
-  waypoints.push_back(wp);
-  wp << 2, 1, 1, 1.5, 0, 0, 0, 0, 0, 0, 0;   // state = 2; constant velocity trajectory.
-  waypoints.push_back(wp);
-  wp << 2,-1, 1, 1.5, 0, 0, 0, 0, 0, 0, 0;
-  waypoints.push_back(wp);
-  wp << 2,-1,-1, 1.5, 0, 0, 0, 0, 0, 0, 0;
-  waypoints.push_back(wp);
-  wp << 2, 1,-1, 1.5, 0, 0, 0, 0, 0, 0, 0;
-  waypoints.push_back(wp);
-  wp << 3, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0;  // state = 3; constant velocity RTL but with altitude.
-  waypoints.push_back(wp);
-  wp << 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;    // state = 4; land.
-  waypoints.push_back(wp);
+void constantVtraj( double end_x, double end_y, double end_z, double end_yaw_rad,
+                    double velocity, double angular_velocity){
+  Quaterniond q(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
+  Vec3 start_rpy = Q2rpy(q);
+  Vec3 start_xyz = uav_lp_p;
+  Vec3 des_xyz = Vec3(end_x,end_y,end_z);
+  Vec3 des_rpy = Vec3(0,0,end_yaw_rad);
+
+  double dist = sqrt(pow((des_xyz[0]-start_xyz[0]),2)+pow((des_xyz[1]-start_xyz[1]),2)+pow((des_xyz[2]-start_xyz[2]),2));
+  double dist_duration = dist/velocity; // In seconds
+  double duration; //total duration in seconds
+  Vec3 vxyz = Vec3(((des_xyz[0]-start_xyz[0])/dist)*velocity,((des_xyz[1]-start_xyz[1])/dist)*velocity,((des_xyz[2]-start_xyz[2])/dist)*velocity);
+  if (start_rpy[2]>=M_PI)  start_rpy[2]-=2*M_PI;
+  if (start_rpy[2]<=-M_PI) start_rpy[2]+=2*M_PI;
+  if (des_rpy[2]>=M_PI)    des_rpy[2]-=2*M_PI;
+  if (des_rpy[2]<=-M_PI)   des_rpy[2]+=2*M_PI;
+  double d_yaw = des_rpy[2] - start_rpy[2];
+  if (d_yaw>=M_PI)  d_yaw-=2*M_PI;
+  if (d_yaw<=-M_PI) d_yaw+=2*M_PI;
+  double yaw_duration = sqrt(pow(d_yaw/angular_velocity,2));
+  if(yaw_duration>=dist_duration){duration = yaw_duration;}else{duration = dist_duration;}
+
+  //initialize trajectory1
+  trajectory1.clear();
+
+  int wpc = duration/Trajectory_timestep;
+  for (int i=0; i<wpc; i++){
+    double dt = Trajectory_timestep*i;
+    Vec3 xyz;
+    Quaterniond q;
+    if(dt<=yaw_duration){
+      q = rpy2Q(Vec3(0,0,start_rpy[2]+dt*angular_velocity));
+
+    }else{
+      q = rpy2Q(des_rpy);
+    }
+    if(dt<=duration){
+      xyz = Vec3(start_xyz[0]+dt*vxyz[0],start_xyz[1]+dt*vxyz[1],start_xyz[2]+dt*vxyz[2]);
+    }else{
+      xyz = des_xyz;
+    }
+    Vec8 traj1;
+    traj1 << dt, xyz[0], xyz[1], xyz[2], q.w(), q.x(), q.y(), q.z();
+    trajectory1.push_back(traj1);
+  }
 }
 
-void missioncontroller (){
-  if (Mission_stage != 0){
-
-  }
+void Mission_Generator(){
+  // Waypoints
+  Vec8 wp; // state x y z yaw v av waittime
+  wp << 1, 0, 0 , 1.5, 0, 0.5, 0.1, 1 ;   // state = 1; takeoff no heading change.
+  waypoints.push_back(wp);
+  wp << 2, 1, 1, 1.5, 0, 0.5, 0.1, 1 ;   // state = 2; constant velocity trajectory.
+  waypoints.push_back(wp);
+  wp << 2,-1, 1, 1.5, 0, 0.5, 0.1, 1 ;
+  waypoints.push_back(wp);
+  wp << 2,-1,-1, 1.5, 0, 0.5, 0.1, 1 ;
+  waypoints.push_back(wp);
+  wp << 2, 1,-1, 1.5, 0, 0.5, 0.1, 1 ;
+  waypoints.push_back(wp);
+  wp << 4, 0, 0, 1.5, 0, 0.5, 0.1, 1 ;  // state = 4; constant velocity RTL but with altitude.
+  waypoints.push_back(wp);
+  wp << 5, 0, 0, 0, 0, 0, 0, 0;    // state = 5; land.
+  waypoints.push_back(wp);
 }
 
 void traj_pub(){
@@ -113,60 +156,53 @@ void traj_pub(){
   // pose.pose.orientation.z = traj1_deque_front[7];
 }
 
-void state_cb(const mavros_msgs::State::ConstPtr& msg){
-  current_state = *msg;
-}
-
-void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
-                    double end_x, double end_y, double end_z, double end_yaw_rad,
-                    double velocity, double angular_velocity){
-  Quaterniond q(uav_lp_q(0),uav_lp_q(1),uav_lp_q(2),uav_lp_q(3));
-  Vec3 start_rpy = Q2rpy(q);
-  Vec3 start_xyz = uav_lp_p;
-  Vec3 des_xyz = Vec3(end_x,end_y,end_z);
-  Vec3 des_rpy = Vec3(0,0,end_yaw_rad);
-
-  double dist = sqrt(pow((des_xyz[0]-start_xyz[0]),2)+pow((des_xyz[1]-start_xyz[1]),2)+pow((des_xyz[2]-start_xyz[2]),2));
-  double dist_duration = dist/velocity; // In seconds
-  double duration; //total duration in seconds
-  Vec3 vxyz = Vec3(((des_xyz[0]-start_xyz[0])/dist)*velocity,((des_xyz[1]-start_xyz[1])/dist)*velocity,((des_xyz[2]-start_xyz[2])/dist)*velocity);
-  if (start_rpy[2]>=M_PI)  start_rpy[2]-=2*M_PI;
-  if (start_rpy[2]<=-M_PI) start_rpy[2]+=2*M_PI;
-  if (des_rpy[2]>=M_PI)    des_rpy[2]-=2*M_PI;
-  if (des_rpy[2]<=-M_PI)   des_rpy[2]+=2*M_PI;
-  double d_yaw = des_rpy[2] - start_rpy[2];
-  if (d_yaw>=M_PI)  d_yaw-=2*M_PI;
-  if (d_yaw<=-M_PI) d_yaw+=2*M_PI;
-  double yaw_duration = sqrt(pow(d_yaw/angular_velocity,2));
-  if(yaw_duration>=dist_duration){duration = yaw_duration;}else{duration = dist_duration;}
-
-  //initialize trajectory1
-  trajectory1.clear();
-
-  int wpc = duration/0.01; //waypointcounts in 100 Hz (10ms)
-  for (int i=0; i<wpc; i++){
-    double dt = 0.04*i;
-    Vec3 xyz;
-    Quaterniond q;
-    if(dt<=yaw_duration){
-      q = rpy2Q(Vec3(0,0,start_rpy[2]+dt*angular_velocity));
-
-    }else{
-      q = rpy2Q(des_rpy);
-    }
-    if(dt<=duration){
-      xyz = Vec3(start_xyz[0]+dt*vxyz[0],start_xyz[1]+dt*vxyz[1],start_xyz[2]+dt*vxyz[2]);
-    }else{
-      xyz = des_xyz;
-    }
+void Finite_state_WP_mission(){
+  // Generate trajectory while mission stage change
+  if (Mission_stage != Current_Mission_stage){
     Vec8 traj1;
-    traj1 << dt, xyz[0], xyz[1], xyz[2], q.w(), q.x(), q.y(), q.z();
+    Current_Mission_stage = Mission_stage;
+    Current_stage_process = waypoints.at(Mission_stage_count);
+    Quaterniond q(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
+    Vec3 current_rpy = Q2rpy(q);
+    if (Current_stage_process[0] = 1){ //state = 1 take off with no heading change
+      constantVtraj(uav_lp_p[0], uav_lp_p[1], Current_stage_process[3], current_rpy[2], Current_stage_process[6], Current_stage_process[7]);
+    }
+    if (Current_stage_process[0] = 2){ //state = 2; constant velocity trajectory with desired heading.
+      constantVtraj(Current_stage_process[1], Current_stage_process[2], Current_stage_process[3], Current_stage_process[4], Current_stage_process[5], Current_stage_process[6]);
+    }
+    if (Current_stage_process[0] = 3){ //state = 3; constant velocity trajectory with no heading change.
+      constantVtraj(Current_stage_process[1], Current_stage_process[2], Current_stage_process[3], current_rpy[2], Current_stage_process[5], Current_stage_process[6]);
+    }
+    if (Current_stage_process[0] = 3){ //state = 4; constant velocity RTL but with altitude return to the takeoff heading.
+      constantVtraj(takeoff_x, takeoff_y, Current_stage_process[3], takeoff_yaw, Current_stage_process[5], Current_stage_process[6]);
+    }
+    if (Current_stage_process[0] = 4){ //state = 5; land.
+      constantVtraj(takeoff_x, takeoff_y, takeoff_z-1, takeoff_yaw, Current_stage_process[5], Current_stage_process[6]);
+    }
+    if (Current_stage_process[7] != 0){ // Wait after finish stage.
+      traj1 = Current_stage_process;
+      int wpc = Current_stage_process[7]/Trajectory_timestep;
+      for (int i=0; i<wpc; i++){
+        traj1[0] = traj1[0] + Trajectory_timestep;
+        trajectory1.push_back(traj1);
+      }
+    }
+    //Default generate 1 second of hover
+    for (int i=0; i<(1/Trajectory_timestep); i++){
+        traj1[0] = traj1[0] + Trajectory_timestep;
+        trajectory1.push_back(traj1);
+    }
+    //Last element of the trajectory stored information of the trajectory
+    //Trajectory staring time, Trajectory duration
+    traj1 << ros::Time::now().toSec(), traj1[0]-1, 0, 0, 0, 0, 0, 0; 
     trajectory1.push_back(traj1);
   }
 
-  Vec8 traj1;
-  traj1 << ros::Time::now().toSec(), 0, 0, 0, 0, 0, 0, 0;
-  trajectory1.push_back(traj1);
+  traj_pub();
+}
+
+void state_cb(const mavros_msgs::State::ConstPtr& msg){
+  current_state = *msg;
 }
 
 void uav_lp_cb(const geometry_msgs::PoseStamped::ConstPtr& pose){
@@ -274,7 +310,7 @@ int main(int argc, char **argv)
       cout << "Takeoff Velocity: " << velocity_takeoff << endl;
       cout << "====================================================" <<endl;
       cout << "====================================================" <<endl;
-      Missionarrangement();
+      Mission_Generator();
       Mission_stage_count = waypoints.size();
       cout << "Mission updated    Mission stage count: " << Mission_stage_count << endl;
       cout << "====================================================" <<endl;
@@ -353,8 +389,7 @@ int main(int argc, char **argv)
         mission_state = HOVER2;
         last_request = ros::Time::now();
       }
-      constantVtraj(uav_lp_p, uav_lp_q, 
-                    takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
+      constantVtraj(takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
                     velocity_mission,velocity_angular);
     }
 
