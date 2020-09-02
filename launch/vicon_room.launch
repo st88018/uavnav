@@ -2,10 +2,6 @@
     <node pkg="uavnav" type="trj_fj005" name="note_trj_fj005" output="screen">
 
         <param name="Initialfromtakeoffpos" type="bool" value="true" />
-        <param name="Velocity_mission" type="double" value="0.5" />
-        <param name="Velocity_angular" type="double" value="0.5" />
-        <param name="Altitude_mission" type="double" value="1.5" />
-        <param name="Velocity_takeoff" type="double" value="0.5" /> 
     </node>
 </launch>
 

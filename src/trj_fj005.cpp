@@ -41,7 +41,8 @@ mavros_msgs::State current_state;
 double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
 int    Mission_state = 0;
 int    Mission_stage = 0;
-int    Mission_stage_count, Current_Mission_stage;
+int    Current_Mission_stage = 0;
+int    Mission_stage_count = 0;
 bool   Initialfromtakeoffpos;
 double Trajectory_timestep = 0.01; // in seconds 
 double uav_lp_x,uav_lp_y,uav_lp_z;
@@ -149,7 +150,7 @@ void traj_pub(){
   // pose.pose.orientation.x = traj1_deque_front[5];
   // pose.pose.orientation.y = traj1_deque_front[6];
   // pose.pose.orientation.z = traj1_deque_front[7];
-  
+
   if (traj1_deque_front[0] > trajectory_duration){ Mission_stage++;}
 }
 
@@ -194,6 +195,7 @@ void Finite_state_WP_mission(){
     //Trajectory staring time, Trajectory duration
     traj1 << ros::Time::now().toSec(), traj1[0]-hovertime, 0, 0, 0, 0, 0, 0; 
     trajectory1.push_back(traj1);
+    cout << "trajectory ready" << endl;
   }
   traj_pub();
 }
@@ -231,10 +233,6 @@ int main(int argc, char **argv)
   altitude_mission = 1;
 
   nh.getParam("Initialfromtakeoffpos", Initialfromtakeoffpos);
-  nh.getParam("Velocity_mission", velocity_mission);
-  nh.getParam("Velocity_takeoff", velocity_takeoff);
-  nh.getParam("Velocity_angular", velocity_angular);
-  nh.getParam("Altitude_mission", altitude_mission);
 
   ros::Subscriber state_sub = nh.subscribe<mavros_msgs::State>
       ("/mavros/state", 10, state_cb);
@@ -301,12 +299,6 @@ int main(int argc, char **argv)
       cout << "takeoff_y: " << takeoff_y << endl;
       cout << "takeoff_z: " << takeoff_z << endl;
       cout << "takeoff_yaw: " << takeoff_yaw << endl;
-      cout << "Mission Altitude: " << altitude_mission << endl;
-      cout << "Mission Velocity: " << velocity_mission << endl;
-      cout << "Angular Velocity: " << velocity_angular << endl;
-      cout << "Takeoff Velocity: " << velocity_takeoff << endl;
-      cout << "====================================================" <<endl;
-      cout << "====================================================" <<endl;
       Mission_Generator();
       Mission_stage_count = waypoints.size();
       cout << "Mission updated    Mission stage count: " << Mission_stage_count << endl;
@@ -329,211 +321,211 @@ int main(int argc, char **argv)
           if( arming_client.call(arm_cmd) &&
               arm_cmd.response.success){
             ROS_INFO("Vehicle armed");
-            mission_state = TAKEOFFP1;
+            // mission_state = TAKEOFFP1;
             Mission_stage = 1;
+            cout << "Mission stage = 1 Mission stat" <<endl;
           }
           last_request = ros::Time::now();
         }
+        last_request = ros::Time::now();
       }
     /*takeoff*****************************************************/
-    if(mission_state==TAKEOFFP1)
-    {
-      static generalMove takeoff1(ros::Time::now().toSec(),
-                                  uav_lp_p, uav_lp_q,
-                                  takeoff_x,takeoff_y,altitude_mission-0.2,takeoff_yaw,
-                                  velocity_takeoff,velocity_angular);
-      takeoff1.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
-      if(takeoff1.finished())
-      {
-        cout << "Takeoff P1 finished" << endl;
-        mission_state = TAKEOFFP2;
-        last_request = ros::Time::now();
-      }
-    }
-    if(mission_state==TAKEOFFP2)
-    {
-      static generalMove takeoff2(ros::Time::now().toSec(),
-                                  uav_lp_p, uav_lp_q,
-                                  takeoff_x,takeoff_y,altitude_mission,takeoff_yaw,
-                                  velocity_takeoff,velocity_angular);
-      takeoff2.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
-      if(takeoff2.finished())
-      {
-        mission_state = HOVER1;
-        cout << "Takeoff P2 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
-    if(mission_state==HOVER1)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT1;
-        cout << "Hover1 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==TAKEOFFP1)
+    // {
+    //   static generalMove takeoff1(ros::Time::now().toSec(),
+    //                               uav_lp_p, uav_lp_q,
+    //                               takeoff_x,takeoff_y,altitude_mission-0.2,takeoff_yaw,
+    //                               velocity_takeoff,velocity_angular);
+    //   takeoff1.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
+    //   if(takeoff1.finished())
+    //   {
+    //     cout << "Takeoff P1 finished" << endl;
+    //     mission_state = TAKEOFFP2;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
+    // if(mission_state==TAKEOFFP2)
+    // {
+    //   static generalMove takeoff2(ros::Time::now().toSec(),
+    //                               uav_lp_p, uav_lp_q,
+    //                               takeoff_x,takeoff_y,altitude_mission,takeoff_yaw,
+    //                               velocity_takeoff,velocity_angular);
+    //   takeoff2.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
+    //   if(takeoff2.finished())
+    //   {
+    //     mission_state = HOVER1;
+    //     cout << "Takeoff P2 finished" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
+    // if(mission_state==HOVER1)
+    // {
+    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
+    //   {
+    //     mission_state = RECT1;
+    //     cout << "Hover1 finished" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==RECT1)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER2;
-        last_request = ros::Time::now();
-      }
-      constantVtraj(takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
-                    velocity_mission,velocity_angular);
-    }
+    // if(mission_state==RECT1)
+    // {
+    //   static generalMove gm(ros::Time::now().toSec(),
+    //                         uav_lp_p, uav_lp_q,
+    //                         takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
+    //                         velocity_mission,velocity_angular);
+    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
+    //   if(gm.finished())
+    //   {
+    //     mission_state = HOVER2;
+    //     last_request = ros::Time::now();
+    //   }
+    //   constantVtraj(takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
+    //                 velocity_mission,velocity_angular);
+    // }
 
-    if(mission_state==HOVER2)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT2;
-        cout << "Hover2 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==HOVER2)
+    // {
+    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
+    //   {
+    //     mission_state = RECT2;
+    //     cout << "Hover2 finished" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==RECT2)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x-1, takeoff_y+1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER3;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==RECT2)
+    // {
+    //   static generalMove gm(ros::Time::now().toSec(),
+    //                         uav_lp_p, uav_lp_q,
+    //                         takeoff_x-1, takeoff_y+1, altitude_mission, takeoff_yaw,
+    //                         velocity_mission,velocity_angular);
+    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
+    //   if(gm.finished())
+    //   {
+    //     mission_state = HOVER3;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==HOVER3)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT3;
-        cout << "Hover3 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==HOVER3)
+    // {
+    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
+    //   {
+    //     mission_state = RECT3;
+    //     cout << "Hover3 finished" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==RECT3)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x-1, takeoff_y-1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER4;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==RECT3)
+    // {
+    //   static generalMove gm(ros::Time::now().toSec(),
+    //                         uav_lp_p, uav_lp_q,
+    //                         takeoff_x-1, takeoff_y-1, altitude_mission, takeoff_yaw,
+    //                         velocity_mission,velocity_angular);
+    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
+    //   if(gm.finished())
+    //   {
+    //     mission_state = HOVER4;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==HOVER4)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT4;
-        cout << "Hover4 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==HOVER4)
+    // {
+    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
+    //   {
+    //     mission_state = RECT4;
+    //     cout << "Hover4 finished" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==RECT4)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x+1, takeoff_y-1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = HOVER5;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==RECT4)
+    // {
+    //   static generalMove gm(ros::Time::now().toSec(),
+    //                         uav_lp_p, uav_lp_q,
+    //                         takeoff_x+1, takeoff_y-1, altitude_mission, takeoff_yaw,
+    //                         velocity_mission,velocity_angular);
+    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
+    //   if(gm.finished())
+    //   {
+    //     mission_state = HOVER5;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==HOVER5)
-    {
-      if(ros::Time::now()-last_request > ros::Duration(5.0))
-      {
-        mission_state = RECT5;
-        cout << "Hover5 finished" << endl;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==HOVER5)
+    // {
+    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
+    //   {
+    //     mission_state = RECT5;
+    //     cout << "Hover5 finished" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==RECT5)
-    {
-      static generalMove gm(ros::Time::now().toSec(),
-                            uav_lp_p, uav_lp_q,
-                            takeoff_x+1, takeoff_y+1, altitude_mission, takeoff_yaw,
-                            velocity_mission,velocity_angular);
-      gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gm.finished())
-      {
-        mission_state = RETURN;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==RECT5)
+    // {
+    //   static generalMove gm(ros::Time::now().toSec(),
+    //                         uav_lp_p, uav_lp_q,
+    //                         takeoff_x+1, takeoff_y+1, altitude_mission, takeoff_yaw,
+    //                         velocity_mission,velocity_angular);
+    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
+    //   if(gm.finished())
+    //   {
+    //     mission_state = RETURN;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    if(mission_state==RETURN)
-    {
-      static generalMove gotolanding(ros::Time::now().toSec(),
-                                     uav_lp_p, uav_lp_q,
-                                     takeoff_x,takeoff_y,altitude_mission, takeoff_yaw,
-                                     velocity_mission,velocity_angular);
-      gotolanding.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-      if(gotolanding.finished())
-      {
-        mission_state = LANDING;
-        cout << "reached landing place" << endl;
-        last_request = ros::Time::now();
-      }
-    }
+    // if(mission_state==RETURN)
+    // {
+    //   static generalMove gotolanding(ros::Time::now().toSec(),
+    //                                  uav_lp_p, uav_lp_q,
+    //                                  takeoff_x,takeoff_y,altitude_mission, takeoff_yaw,
+    //                                  velocity_mission,velocity_angular);
+    //   gotolanding.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
+    //   if(gotolanding.finished())
+    //   {
+    //     mission_state = LANDING;
+    //     cout << "reached landing place" << endl;
+    //     last_request = ros::Time::now();
+    //   }
+    // }
 
-    //PLEASE DEFINE THE LANDING PARAMETER HERE
-    if(mission_state==LANDING)
-    {
-      double secs = (ros::Time::now() - last_request).toSec();
-      //cout << secs << endl;
-      pose.pose.position.x = takeoff_x;
-      pose.pose.position.z = takeoff_y;
-      pose.pose.position.z = takeoff_z-(secs)*0.1;
-      if(pose.pose.position.z < -0.3)
-      {
-        pose.pose.position.z=-0.3;
-        arm_cmd.request.value = false;
-        if( arming_client.call(arm_cmd) &&
-            arm_cmd.response.success)
-        {
-          mission_state=END;
-          cout << "Landing P2 finished" << endl;
-          return 0;//break the control UAV will land automatically
-        }
-      }
-    }
+    // //PLEASE DEFINE THE LANDING PARAMETER HERE
+    // if(mission_state==LANDING)
+    // {
+    //   double secs = (ros::Time::now() - last_request).toSec();
+    //   //cout << secs << endl;
+    //   pose.pose.position.x = takeoff_x;
+    //   pose.pose.position.z = takeoff_y;
+    //   pose.pose.position.z = takeoff_z-(secs)*0.1;
+    //   if(pose.pose.position.z < -0.3)
+    //   {
+    //     pose.pose.position.z=-0.3;
+    //     arm_cmd.request.value = false;
+    //     if( arming_client.call(arm_cmd) &&
+    //         arm_cmd.response.success)
+    //     {
+    //       mission_state=END;
+    //       cout << "Landing P2 finished" << endl;
+    //       return 0;//break the control UAV will land automatically
+    //     }
+    //   }
+    // }
 
-    if(mission_state==END)
-    {
-      pose.pose.position.x = 0;
-      pose.pose.position.y = 0;
-      pose.pose.position.z = -0.3;
-      return 0;
-    }
+    // if(mission_state==END)
+    // {
+    //   pose.pose.position.x = 0;
+    //   pose.pose.position.y = 0;
+    //   pose.pose.position.z = -0.3;
+    //   return 0;
+    // }
 
-
-    if (trajectory1.size() > 0){traj_pub();}
-    
+    Finite_state_WP_mission();
     local_pos_pub.publish(pose);
     ros::spinOnce();
     rate.sleep();
