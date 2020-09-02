@@ -39,27 +39,82 @@ enum Mission_STATE {
 
 mavros_msgs::State current_state;
 double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
-int    Mission_state,Mission_stage;
+int    Mission_state = 0;
+int    Mission_stage = 0;
+int    Mission_stage_count, Current_Mission_stage;
 bool   Initialfromtakeoffpos;
 double uav_lp_x,uav_lp_y,uav_lp_z;
 double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
 double velocity_takeoff,velocity_angular, velocity_mission, altitude_mission;
 Vec3 uav_lp_p;
 Vec4 uav_lp_q;
+geometry_msgs::PoseStamped pose;
 
 // Initial trajectories
 deque<Vec8> trajectory1;
+bool trajectory1_initflag = false;
 
 // Initial waypoints
-deque<Vec9> waypoints1;
+deque<Vec11> waypoints;
 
 void Missionarrangement(){
-  // Waypoints 
-  double wps[3][9] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  };
+  // Waypoints
+  Vec11 wp; // state x y z qw qx qy qz waittime v av
+  wp << 1, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0;   // state = 1; takeoff no heading change.
+  waypoints.push_back(wp);
+  wp << 2, 1, 1, 1.5, 0, 0, 0, 0, 0, 0, 0;   // state = 2; constant velocity trajectory.
+  waypoints.push_back(wp);
+  wp << 2,-1, 1, 1.5, 0, 0, 0, 0, 0, 0, 0;
+  waypoints.push_back(wp);
+  wp << 2,-1,-1, 1.5, 0, 0, 0, 0, 0, 0, 0;
+  waypoints.push_back(wp);
+  wp << 2, 1,-1, 1.5, 0, 0, 0, 0, 0, 0, 0;
+  waypoints.push_back(wp);
+  wp << 3, 0, 0, 1.5, 0, 0, 0, 0, 0, 0, 0;  // state = 3; constant velocity RTL but with altitude.
+  waypoints.push_back(wp);
+  wp << 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;    // state = 4; land.
+  waypoints.push_back(wp);
+}
+
+void missioncontroller (){
+  if (Mission_stage != 0){
+
+  }
+}
+
+void traj_pub(){
+
+  int currentstate,currentstage;
+  double current_time = ros::Time::now().toSec();
+  Vec8 traj1_deque_front = trajectory1.front();
+  Vec8 traj1_deque_back = trajectory1.back();
+  double traj1_start_time = traj1_deque_back[0];
+  
+  // if (trajectory1_initflag){
+  //   traj_init_time = ros::Time::now().toSec();
+  //   trajectory1_initflag = false;
+  //   cout << "====================================================" <<endl;
+  //   cout << "Trajectory initialized !!" <<endl;
+  //   cout << "====================================================" <<endl;
+  // }
+  while (current_time - traj1_start_time - traj1_deque_front[0] > 0){
+    trajectory1.pop_front();
+    traj1_deque_front = trajectory1.front();
+    cout << "ddt: " <<  current_time - traj1_start_time - traj1_deque_front[0] << endl;
+  }
+ 
+  // pose.header.frame_id = "world";
+  // pose.pose.position.x = traj1_deque_front[1];
+  // pose.pose.position.y = traj1_deque_front[2];
+  // pose.pose.position.z = traj1_deque_front[3];
+  // pose.pose.orientation.w = traj1_deque_front[4];
+  // pose.pose.orientation.x = traj1_deque_front[5];
+  // pose.pose.orientation.y = traj1_deque_front[6];
+  // pose.pose.orientation.z = traj1_deque_front[7];
+}
+
+void state_cb(const mavros_msgs::State::ConstPtr& msg){
+  current_state = *msg;
 }
 
 void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
@@ -108,10 +163,10 @@ void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
     traj1 << dt, xyz[0], xyz[1], xyz[2], q.w(), q.x(), q.y(), q.z();
     trajectory1.push_back(traj1);
   }
-}
 
-void state_cb(const mavros_msgs::State::ConstPtr& msg){
-  current_state = *msg;
+  Vec8 traj1;
+  traj1 << ros::Time::now().toSec(), 0, 0, 0, 0, 0, 0, 0;
+  trajectory1.push_back(traj1);
 }
 
 void uav_lp_cb(const geometry_msgs::PoseStamped::ConstPtr& pose){
@@ -160,7 +215,7 @@ int main(int argc, char **argv)
       ("/mavros/set_mode");
 
   //the setpoint publishing rate MUST be faster than 2Hz
-  ros::Rate rate(20.0);
+  ros::Rate rate(25.0);
 
   //wait for FCU connection 
   cout << "Waiting for FCU connection " << endl;
@@ -171,7 +226,6 @@ int main(int argc, char **argv)
   }
 
   //send a few setpoints before starting
-  geometry_msgs::PoseStamped pose;
   pose.header.frame_id = "world";
   pose.pose.position.x = 0.0;
   pose.pose.position.y = 0.0;
@@ -196,34 +250,35 @@ int main(int argc, char **argv)
   ros::Time init_time = ros::Time::now();
 
   while(ros::ok()){
-    /*Update takeoff Position**********************************************/
+    /*Update takeoff Position and Mission**********************************************/
     if(Initialfromtakeoffpos)
     {
-      static bool takeoffinit=true;
-      if(takeoffinit){
-        Quaterniond q(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
-        Vec3 rpy = Q2rpy(q);
-        takeoff_x = uav_lp_x;
-        takeoff_y = uav_lp_y;
-        takeoff_z = uav_lp_z;
-        takeoff_yaw = rpy[2];
-        Initialfromtakeoffpos = false;
-        takeoffinit = false;
-        cout << "====================================================" <<endl;
-        cout << "====================================================" <<endl;
-        cout << "Mission Params Initialized" << endl;
-        cout << " " << endl;
-        cout << "takeoff_x: " << takeoff_x << endl;
-        cout << "takeoff_y: " << takeoff_y << endl;
-        cout << "takeoff_z: " << takeoff_z << endl;
-        cout << "takeoff_yaw: " << takeoff_yaw << endl;
-        cout << "Mission Altitude: " << altitude_mission << endl;
-        cout << "Mission Velocity: " << velocity_mission << endl;
-        cout << "Angular Velocity: " << velocity_angular << endl;
-        cout << "Takeoff Velocity: " << velocity_takeoff << endl;
-        cout << "====================================================" <<endl;
-        cout << "====================================================" <<endl;
-      }
+      Quaterniond q(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
+      Vec3 rpy = Q2rpy(q);
+      takeoff_x = uav_lp_x;
+      takeoff_y = uav_lp_y;
+      takeoff_z = uav_lp_z;
+      takeoff_yaw = rpy[2];
+      Initialfromtakeoffpos = false;
+
+      cout << "====================================================" <<endl;
+      cout << "====================================================" <<endl;
+      cout << "Mission Params Initialized" << endl;
+      cout << "takeoff_x: " << takeoff_x << endl;
+      cout << "takeoff_y: " << takeoff_y << endl;
+      cout << "takeoff_z: " << takeoff_z << endl;
+      cout << "takeoff_yaw: " << takeoff_yaw << endl;
+      cout << "Mission Altitude: " << altitude_mission << endl;
+      cout << "Mission Velocity: " << velocity_mission << endl;
+      cout << "Angular Velocity: " << velocity_angular << endl;
+      cout << "Takeoff Velocity: " << velocity_takeoff << endl;
+      cout << "====================================================" <<endl;
+      cout << "====================================================" <<endl;
+      Missionarrangement();
+      Mission_stage_count = waypoints.size();
+      cout << "Mission updated    Mission stage count: " << Mission_stage_count << endl;
+      cout << "====================================================" <<endl;
+      cout << "====================================================" <<endl;
     }
     /*offboard and arm*****************************************************/
     if( current_state.mode != "OFFBOARD" && 
@@ -242,13 +297,12 @@ int main(int argc, char **argv)
               arm_cmd.response.success){
             ROS_INFO("Vehicle armed");
             mission_state = TAKEOFFP1;
+            Mission_stage = 1;
           }
           last_request = ros::Time::now();
         }
       }
-
     /*takeoff*****************************************************/
-    //PLEASE DEFINE THE LANDING PARAMETER HERE
     if(mission_state==TAKEOFFP1)
     {
       static generalMove takeoff1(ros::Time::now().toSec(),
@@ -277,7 +331,6 @@ int main(int argc, char **argv)
         last_request = ros::Time::now();
       }
     }
-
     if(mission_state==HOVER1)
     {
       if(ros::Time::now()-last_request > ros::Duration(5.0))
@@ -447,6 +500,8 @@ int main(int argc, char **argv)
     }
 
 
+    if (trajectory1.size() > 0){traj_pub();}
+    
     local_pos_pub.publish(pose);
     ros::spinOnce();
     rate.sleep();
