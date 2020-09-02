@@ -15,6 +15,7 @@ typedef Eigen::Matrix<double, 3, 1> Vec3;
 typedef Eigen::Matrix<int, 3, 1> Vec3I;
 typedef Eigen::Matrix<double, 4, 1> Vec4;
 typedef Eigen::Matrix<double, 6, 1> Vec6;
+typedef Eigen::Matrix<double, 8, 1> Vec8;
 typedef Eigen::Matrix<double, 9, 1> Vec9;
 typedef Eigen::Matrix<double, 12, 1> Vec12;
 typedef Eigen::Matrix<double, 15, 1> Vec15;

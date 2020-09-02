@@ -40,9 +40,7 @@ enum Mission_STATE {
 mavros_msgs::State current_state;
 double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
 int    Mission_state,Mission_stage;
-bool   force_start; 
 bool   Initialfromtakeoffpos;
-double tmpposition_x,tmpposition_y,tmpposition_z,tmporientation_yaw;
 double uav_lp_x,uav_lp_y,uav_lp_z;
 double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
 double velocity_takeoff,velocity_angular, velocity_mission, altitude_mission;
@@ -50,11 +48,19 @@ Vec3 uav_lp_p;
 Vec4 uav_lp_q;
 
 // Initial trajectories
-ros::Time traj1_init_time;
-deque<double> traj1_timestamp;
-deque<Vec3> traj1_xyz;
-deque<Vec4> traj1_q;
+deque<Vec8> trajectory1;
 
+// Initial waypoints
+deque<Vec9> waypoints1;
+
+void Missionarrangement(){
+  // Waypoints 
+  double wps[3][9] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0}
+  };
+}
 
 void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
                     double end_x, double end_y, double end_z, double end_yaw_rad,
@@ -80,9 +86,9 @@ void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
   if(yaw_duration>=dist_duration){duration = yaw_duration;}else{duration = dist_duration;}
 
   //initialize trajectory1
-  traj1_timestamp.clear();traj1_xyz.clear();traj1_q.clear();
+  trajectory1.clear();
 
-  int wpc = duration/25; //waypointcounts in 25 Hz (40ms)
+  int wpc = duration/0.01; //waypointcounts in 100 Hz (10ms)
   for (int i=0; i<wpc; i++){
     double dt = 0.04*i;
     Vec3 xyz;
@@ -98,9 +104,9 @@ void constantVtraj( Vec3 uav_lp_p, Vec4 uav_lp_q,
     }else{
       xyz = des_xyz;
     }
-    traj1_timestamp.push_back(dt);
-    traj1_xyz.push_back(xyz);
-    traj1_q.push_back(Vec4(q.w(),q.x(),q.y(),q.z()));
+    Vec8 traj1;
+    traj1 << dt, xyz[0], xyz[1], xyz[2], q.w(), q.x(), q.y(), q.z();
+    trajectory1.push_back(traj1);
   }
 }
 
@@ -286,7 +292,7 @@ int main(int argc, char **argv)
     {
       static generalMove gm(ros::Time::now().toSec(),
                             uav_lp_p, uav_lp_q,
-                            takeoff_x+1, takeoff_y+1, altitude_mission, takeoff_yaw,
+                            takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
                             velocity_mission,velocity_angular);
       gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
       if(gm.finished())
@@ -294,6 +300,9 @@ int main(int argc, char **argv)
         mission_state = HOVER2;
         last_request = ros::Time::now();
       }
+      constantVtraj(uav_lp_p, uav_lp_q, 
+                    takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
+                    velocity_mission,velocity_angular);
     }
 
     if(mission_state==HOVER2)
@@ -450,6 +459,7 @@ int main(int argc, char **argv)
       cout << "desiredpos_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
       cout << "ROS_time: " << ros::Time::now() << endl;
       cout << "Mission_init_time: " << init_time << endl;
+      cout << "Current_trajectory_size: " << trajectory1.size() << endl;
       cout << "------------------------------------------------------------------------------" << endl;
       coutcounter = 0;
     }else{coutcounter++;}
