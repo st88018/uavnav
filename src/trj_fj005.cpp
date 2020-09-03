@@ -18,25 +18,6 @@
 #define PI (3.1415926)
 using namespace std;
 
-enum Mission_STATE {
-  IDLE,
-  TAKEOFFP1,
-  TAKEOFFP2,
-  HOVER1,
-  RECT1,
-  HOVER2,
-  RECT2,
-  HOVER3,
-  RECT3,
-  HOVER4,
-  RECT4,
-  HOVER5,
-  RECT5,
-  RETURN,
-  LANDING,
-  END,
-} mission_state=IDLE;
-
 mavros_msgs::State current_state;
 double takeoff_x,takeoff_y,takeoff_z,takeoff_yaw;
 int    Mission_state = 0;
@@ -44,17 +25,18 @@ int    Mission_stage = 0;
 int    Current_Mission_stage = 0;
 int    Mission_stage_count = 0;
 bool   Initialfromtakeoffpos;
-double Trajectory_timestep = 0.01; // in seconds 
+double Trajectory_timestep = 0.02; // in Seconds
 double uav_lp_x,uav_lp_y,uav_lp_z;
 double uav_lp_qx,uav_lp_qy,uav_lp_qz,uav_lp_qw;
 double velocity_takeoff,velocity_angular, velocity_mission, altitude_mission;
 Vec3 uav_lp_p;
 Vec4 uav_lp_q;
-Vec8 Current_stage_process;
+Vec8 Current_stage_mission;
 geometry_msgs::PoseStamped pose;
 
 // Initial trajectories
 deque<Vec8> trajectory1;
+Vec2 traj1_information;
 bool trajectory1_initflag = false;
 
 // Initial waypoints
@@ -90,17 +72,21 @@ void constantVtraj( double end_x, double end_y, double end_z, double end_yaw_rad
     double dt = Trajectory_timestep*i;
     Vec3 xyz;
     Quaterniond q;
+    
+    // RPY
     if(dt<=yaw_duration){
       q = rpy2Q(Vec3(0,0,start_rpy[2]+dt*angular_velocity));
 
     }else{
       q = rpy2Q(des_rpy);
     }
+    // Position_xyz
     if(dt<=duration){
       xyz = Vec3(start_xyz[0]+dt*vxyz[0],start_xyz[1]+dt*vxyz[1],start_xyz[2]+dt*vxyz[2]);
     }else{
       xyz = des_xyz;
     }
+
     Vec8 traj1;
     traj1 << dt, xyz[0], xyz[1], xyz[2], q.w(), q.x(), q.y(), q.z();
     trajectory1.push_back(traj1);
@@ -110,76 +96,80 @@ void constantVtraj( double end_x, double end_y, double end_z, double end_yaw_rad
 void Mission_Generator(){
   // Waypoints
   Vec8 wp; // state x y z yaw v av waittime
-  wp << 1, 0, 0 , 1.5, 0, 0.5, 0.1, 1 ;   // state = 1; takeoff no heading change.
+  wp << 1, 0, 0 , 5, 0, 1, 1, 1 ;   // state = 1; takeoff no heading change.
   waypoints.push_back(wp);
-  wp << 2, 1, 1, 1.5, 0, 0.5, 0.1, 1 ;   // state = 2; constant velocity trajectory.
+  wp << 2, 5, 5, 5, 0,  1, 1, 1 ;   // state = 2; constant velocity trajectory.
   waypoints.push_back(wp);
-  wp << 2,-1, 1, 1.5, 0, 0.5, 0.1, 1 ;
+  wp << 2,-5, 5, 5, 0,  1, 1, 1 ;
   waypoints.push_back(wp);
-  wp << 2,-1,-1, 1.5, 0, 0.5, 0.1, 1 ;
+  wp << 2,-5,-5, 5, 0,  1, 1, 1 ;
   waypoints.push_back(wp);
-  wp << 2, 1,-1, 1.5, 0, 0.5, 0.1, 1 ;
+  wp << 2, 5,-5, 5, 0,  1, 1, 1 ;
   waypoints.push_back(wp);
-  wp << 4, 0, 0, 1.5, 0, 0.5, 0.1, 1 ;  // state = 4; constant velocity RTL but with altitude.
+  wp << 4, 0, 0, 5, 0,  1, 1, 1 ;  // state = 4; constant velocity RTL but with altitude.
   waypoints.push_back(wp);
-  wp << 5, 0, 0, 0, 0, 0, 0, 0;    // state = 5; land.
+  wp << 5, 0, 0, 0, 0,  1, 1, 10;    // state = 5; land.
   waypoints.push_back(wp);
 }
 
 void traj_pub(){
-
   double current_time = ros::Time::now().toSec();
-  // Update the information of current trajectory
-  Vec8 traj1_deque_back = trajectory1.back();
-  double traj1_start_time = traj1_deque_back[0];
-  double trajectory_duration = traj1_deque_back[1];
-  
   Vec8 traj1_deque_front = trajectory1.front();
 
-  while (current_time - traj1_start_time - traj1_deque_front[0] > 0){
+  while (current_time - traj1_information[0] - traj1_deque_front[0] > 0){
     trajectory1.pop_front();
     traj1_deque_front = trajectory1.front();
-    cout << "ddt: " <<  current_time - traj1_start_time - traj1_deque_front[0] << endl;
+    // cout << "ddt: " <<  current_time - traj1_information[0] - traj1_deque_front[0] << endl;
   }
    
-  // pose.header.frame_id = "world";
-  // pose.pose.position.x = traj1_deque_front[1];
-  // pose.pose.position.y = traj1_deque_front[2];
-  // pose.pose.position.z = traj1_deque_front[3];
-  // pose.pose.orientation.w = traj1_deque_front[4];
-  // pose.pose.orientation.x = traj1_deque_front[5];
-  // pose.pose.orientation.y = traj1_deque_front[6];
-  // pose.pose.orientation.z = traj1_deque_front[7];
+  pose.header.frame_id = "world";
+  pose.pose.position.x = traj1_deque_front[1];
+  pose.pose.position.y = traj1_deque_front[2];
+  pose.pose.position.z = traj1_deque_front[3];
+  pose.pose.orientation.w = traj1_deque_front[4];
+  pose.pose.orientation.x = traj1_deque_front[5];
+  pose.pose.orientation.y = traj1_deque_front[6];
+  pose.pose.orientation.z = traj1_deque_front[7];
 
-  if (traj1_deque_front[0] > trajectory_duration){ Mission_stage++;}
+  // Trajectory current time > duration than goes on to next stage
+  if (traj1_deque_front[0] > traj1_information[1]){ Mission_stage++;}
 }
 
 void Finite_state_WP_mission(){
   // Generate trajectory while mission stage change
+  
   if (Mission_stage != Current_Mission_stage){
     Vec8 traj1;
-    Current_Mission_stage = Mission_stage;
-    Current_stage_process = waypoints.at(Mission_stage_count);
+    Current_Mission_stage = Mission_stage;  //Update Current_Mission_stage
+    Current_stage_mission = waypoints.at(Mission_stage-1);
     Quaterniond q(uav_lp_qw,uav_lp_qx,uav_lp_qy,uav_lp_qz);
     Vec3 current_rpy = Q2rpy(q);
-    if (Current_stage_process[0] = 1){ //state = 1 take off with no heading change
-      constantVtraj(uav_lp_p[0], uav_lp_p[1], Current_stage_process[3], current_rpy[2], Current_stage_process[6], Current_stage_process[7]);
+    Mission_state = Current_stage_mission[0];
+    cout<<"!!!!: "<<Mission_state<<endl;
+
+    if (Mission_state == 1){ //state = 1 take off with no heading change
+      constantVtraj(uav_lp_p[0], uav_lp_p[1], Current_stage_mission[3], current_rpy[2], Current_stage_mission[6], Current_stage_mission[7]);
+      cout << "applied state 1" <<endl;
     }
-    if (Current_stage_process[0] = 2){ //state = 2; constant velocity trajectory with desired heading.
-      constantVtraj(Current_stage_process[1], Current_stage_process[2], Current_stage_process[3], Current_stage_process[4], Current_stage_process[5], Current_stage_process[6]);
+    if (Mission_state == 2){ //state = 2; constant velocity trajectory with desired heading.
+      constantVtraj(Current_stage_mission[1], Current_stage_mission[2], Current_stage_mission[3], Current_stage_mission[4], Current_stage_mission[5], Current_stage_mission[6]);
+      cout << "applied state 2" <<endl;
     }
-    if (Current_stage_process[0] = 3){ //state = 3; constant velocity trajectory with no heading change.
-      constantVtraj(Current_stage_process[1], Current_stage_process[2], Current_stage_process[3], current_rpy[2], Current_stage_process[5], Current_stage_process[6]);
+    if (Mission_state == 3){ //state = 3; constant velocity trajectory with no heading change.
+      constantVtraj(Current_stage_mission[1], Current_stage_mission[2], Current_stage_mission[3], current_rpy[2], Current_stage_mission[5], Current_stage_mission[6]);
+      cout << "applied state 3" <<endl;
     }
-    if (Current_stage_process[0] = 3){ //state = 4; constant velocity RTL but with altitude return to the takeoff heading.
-      constantVtraj(takeoff_x, takeoff_y, Current_stage_process[3], takeoff_yaw, Current_stage_process[5], Current_stage_process[6]);
+    if (Mission_state == 4){ //state = 4; constant velocity RTL but with altitude return to the takeoff heading.
+      constantVtraj(takeoff_x, takeoff_y, Current_stage_mission[3], takeoff_yaw, Current_stage_mission[5], Current_stage_mission[6]);
+      cout << "applied state 4" <<endl;
     }
-    if (Current_stage_process[0] = 4){ //state = 5; land.
-      constantVtraj(takeoff_x, takeoff_y, takeoff_z-1, takeoff_yaw, Current_stage_process[5], Current_stage_process[6]);
+    if (Mission_state == 5){ //state = 5; land.
+      constantVtraj(takeoff_x, takeoff_y, takeoff_z-1, takeoff_yaw, Current_stage_mission[5], Current_stage_mission[6]);
+      cout << "applied state 5" <<endl;
     }
-    if (Current_stage_process[7] != 0){ // Wait after finish stage.
-      traj1 = Current_stage_process;
-      int wpc = Current_stage_process[7]/Trajectory_timestep;
+    if (Current_stage_mission[7] != 0){ // Wait after finish stage.
+      traj1 = trajectory1.back();
+      int wpc = Current_stage_mission[7]/Trajectory_timestep;
       for (int i=0; i<wpc; i++){
         traj1[0] = traj1[0] + Trajectory_timestep;
         trajectory1.push_back(traj1);
@@ -187,17 +177,24 @@ void Finite_state_WP_mission(){
     }
     //Default generate 1 second of hover
     int hovertime = 1;
+    traj1 = trajectory1.back();
     for (int i=0; i<(hovertime/Trajectory_timestep); i++){
         traj1[0] = traj1[0] + Trajectory_timestep;
         trajectory1.push_back(traj1);
     }
-    //Last element of the trajectory stored information of the trajectory
+    //Store the Trajectory information 
     //Trajectory staring time, Trajectory duration
-    traj1 << ros::Time::now().toSec(), traj1[0]-hovertime, 0, 0, 0, 0, 0, 0; 
-    trajectory1.push_back(traj1);
+    traj1_information = Vec2(ros::Time::now().toSec(),traj1[0]-1);
     cout << "trajectory ready" << endl;
+    
+    // For Debug section plot the whole trajectory
+    // int trajectorysize = trajectory1.size();
+    // for (int i = 0; i < trajectorysize; i++){
+    //   Vec8 current_traj = trajectory1.at(i);
+    //   cout << "dt: " << current_traj[0] << " x: " << current_traj[1] << " y: " << current_traj[2] << " z: " << current_traj[3] << endl;
+    // }
   }
-  traj_pub();
+  if(trajectory1.size() > 0){traj_pub();}
 }
 
 void state_cb(const mavros_msgs::State::ConstPtr& msg){
@@ -265,7 +262,6 @@ int main(int argc, char **argv)
   pose.pose.orientation.y=0.0;
   pose.pose.orientation.z=0.0;
   pose.pose.orientation.w=1.0;
-  
   for(int i = 100; ros::ok() && i > 0; --i){
     local_pos_pub.publish(pose);
     ros::spinOnce();
@@ -308,7 +304,7 @@ int main(int argc, char **argv)
     /*offboard and arm*****************************************************/
     if( current_state.mode != "OFFBOARD" && 
           (ros::Time::now() - last_request > ros::Duration(1.0)) &&
-          (ros::Time::now() - init_time < ros::Duration(20.0) )){ //Set Offboard trigger duration here
+          (ros::Time::now() - init_time < ros::Duration(10.0))){ //Set Offboard trigger duration here
         if( set_mode_client.call(offb_set_mode) &&
             offb_set_mode.response.mode_sent){
           ROS_INFO("Offboard enabled");
@@ -317,233 +313,37 @@ int main(int argc, char **argv)
       }
       else{
         if( !current_state.armed &&
-            (ros::Time::now() - last_request > ros::Duration(1.0))){
+            (ros::Time::now() - last_request > ros::Duration(1.0)) &&
+          (ros::Time::now() - init_time < ros::Duration(10.0))){
           if( arming_client.call(arm_cmd) &&
               arm_cmd.response.success){
             ROS_INFO("Vehicle armed");
             // mission_state = TAKEOFFP1;
             Mission_stage = 1;
-            cout << "Mission stage = 1 Mission stat" <<endl;
+            cout << "Mission stage = 1 Mission start!" <<endl;
           }
           last_request = ros::Time::now();
         }
-        last_request = ros::Time::now();
       }
-    /*takeoff*****************************************************/
-    // if(mission_state==TAKEOFFP1)
-    // {
-    //   static generalMove takeoff1(ros::Time::now().toSec(),
-    //                               uav_lp_p, uav_lp_q,
-    //                               takeoff_x,takeoff_y,altitude_mission-0.2,takeoff_yaw,
-    //                               velocity_takeoff,velocity_angular);
-    //   takeoff1.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
-    //   if(takeoff1.finished())
-    //   {
-    //     cout << "Takeoff P1 finished" << endl;
-    //     mission_state = TAKEOFFP2;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-    // if(mission_state==TAKEOFFP2)
-    // {
-    //   static generalMove takeoff2(ros::Time::now().toSec(),
-    //                               uav_lp_p, uav_lp_q,
-    //                               takeoff_x,takeoff_y,altitude_mission,takeoff_yaw,
-    //                               velocity_takeoff,velocity_angular);
-    //   takeoff2.getPose(ros::Time::now().toSec(), uav_lp_p, uav_lp_q, pose);
-    //   if(takeoff2.finished())
-    //   {
-    //     mission_state = HOVER1;
-    //     cout << "Takeoff P2 finished" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-    // if(mission_state==HOVER1)
-    // {
-    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
-    //   {
-    //     mission_state = RECT1;
-    //     cout << "Hover1 finished" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==RECT1)
-    // {
-    //   static generalMove gm(ros::Time::now().toSec(),
-    //                         uav_lp_p, uav_lp_q,
-    //                         takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
-    //                         velocity_mission,velocity_angular);
-    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-    //   if(gm.finished())
-    //   {
-    //     mission_state = HOVER2;
-    //     last_request = ros::Time::now();
-    //   }
-    //   constantVtraj(takeoff_x+10, takeoff_y+10, altitude_mission, takeoff_yaw,
-    //                 velocity_mission,velocity_angular);
-    // }
-
-    // if(mission_state==HOVER2)
-    // {
-    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
-    //   {
-    //     mission_state = RECT2;
-    //     cout << "Hover2 finished" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==RECT2)
-    // {
-    //   static generalMove gm(ros::Time::now().toSec(),
-    //                         uav_lp_p, uav_lp_q,
-    //                         takeoff_x-1, takeoff_y+1, altitude_mission, takeoff_yaw,
-    //                         velocity_mission,velocity_angular);
-    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-    //   if(gm.finished())
-    //   {
-    //     mission_state = HOVER3;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==HOVER3)
-    // {
-    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
-    //   {
-    //     mission_state = RECT3;
-    //     cout << "Hover3 finished" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==RECT3)
-    // {
-    //   static generalMove gm(ros::Time::now().toSec(),
-    //                         uav_lp_p, uav_lp_q,
-    //                         takeoff_x-1, takeoff_y-1, altitude_mission, takeoff_yaw,
-    //                         velocity_mission,velocity_angular);
-    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-    //   if(gm.finished())
-    //   {
-    //     mission_state = HOVER4;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==HOVER4)
-    // {
-    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
-    //   {
-    //     mission_state = RECT4;
-    //     cout << "Hover4 finished" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==RECT4)
-    // {
-    //   static generalMove gm(ros::Time::now().toSec(),
-    //                         uav_lp_p, uav_lp_q,
-    //                         takeoff_x+1, takeoff_y-1, altitude_mission, takeoff_yaw,
-    //                         velocity_mission,velocity_angular);
-    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-    //   if(gm.finished())
-    //   {
-    //     mission_state = HOVER5;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==HOVER5)
-    // {
-    //   if(ros::Time::now()-last_request > ros::Duration(5.0))
-    //   {
-    //     mission_state = RECT5;
-    //     cout << "Hover5 finished" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==RECT5)
-    // {
-    //   static generalMove gm(ros::Time::now().toSec(),
-    //                         uav_lp_p, uav_lp_q,
-    //                         takeoff_x+1, takeoff_y+1, altitude_mission, takeoff_yaw,
-    //                         velocity_mission,velocity_angular);
-    //   gm.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-    //   if(gm.finished())
-    //   {
-    //     mission_state = RETURN;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // if(mission_state==RETURN)
-    // {
-    //   static generalMove gotolanding(ros::Time::now().toSec(),
-    //                                  uav_lp_p, uav_lp_q,
-    //                                  takeoff_x,takeoff_y,altitude_mission, takeoff_yaw,
-    //                                  velocity_mission,velocity_angular);
-    //   gotolanding.getPose(ros::Time::now().toSec(),uav_lp_p, uav_lp_q, pose);
-    //   if(gotolanding.finished())
-    //   {
-    //     mission_state = LANDING;
-    //     cout << "reached landing place" << endl;
-    //     last_request = ros::Time::now();
-    //   }
-    // }
-
-    // //PLEASE DEFINE THE LANDING PARAMETER HERE
-    // if(mission_state==LANDING)
-    // {
-    //   double secs = (ros::Time::now() - last_request).toSec();
-    //   //cout << secs << endl;
-    //   pose.pose.position.x = takeoff_x;
-    //   pose.pose.position.z = takeoff_y;
-    //   pose.pose.position.z = takeoff_z-(secs)*0.1;
-    //   if(pose.pose.position.z < -0.3)
-    //   {
-    //     pose.pose.position.z=-0.3;
-    //     arm_cmd.request.value = false;
-    //     if( arming_client.call(arm_cmd) &&
-    //         arm_cmd.response.success)
-    //     {
-    //       mission_state=END;
-    //       cout << "Landing P2 finished" << endl;
-    //       return 0;//break the control UAV will land automatically
-    //     }
-    //   }
-    // }
-
-    // if(mission_state==END)
-    // {
-    //   pose.pose.position.x = 0;
-    //   pose.pose.position.y = 0;
-    //   pose.pose.position.z = -0.3;
-    //   return 0;
-    // }
-
+    /*Mission start here*****************************************************/
     Finite_state_WP_mission();
     local_pos_pub.publish(pose);
     ros::spinOnce();
     rate.sleep();
     
     int coutcounter;
-    if(coutcounter > 50){
+    if(coutcounter > 20){
       cout << "------------------------------------------------------------------------------" << endl;
       cout << "Mission_Stage: " << Mission_stage << "    Mission_State: " << Mission_state <<endl;
       cout << "currentpos_x: " << uav_lp_x << " y: " << uav_lp_y << " z: "<< uav_lp_z << endl;
       cout << "desiredpos_x: " << pose.pose.position.x << " y: " << pose.pose.position.y << " z: "<< pose.pose.position.z << endl;
       cout << "ROS_time: " << ros::Time::now() << endl;
-      cout << "Mission_init_time: " << init_time << endl;
+      cout << "Trajectory_init_time: " << traj1_information[0] << endl;
+      cout << "Trajectory duration: " << traj1_information[1] <<endl; 
       cout << "Current_trajectory_size: " << trajectory1.size() << endl;
       cout << "------------------------------------------------------------------------------" << endl;
       coutcounter = 0;
     }else{coutcounter++;}
-    
   }
-
   return 0;
 }
